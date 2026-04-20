@@ -1,0 +1,79 @@
+@host = http://localhost:8080
+@tenantId = 123e4567-e89b-12d3-a456-426614174000
+@planId = 987e6543-e21b-12d3-a456-426614174000
+@subscriptionId = 555e4444-e89b-12d3-a456-426614174000
+@invoiceId = 111e2222-e89b-12d3-a456-426614174000
+
+### ─── Health ───
+
+GET {{host}}/api/health
+
+### ─── Tenants ───
+
+### Create tenant
+POST {{host}}/api/tenants
+Content-Type: application/json
+
+{
+  "slug": "acme-corp",
+  "name": "Acme Corporation",
+  "email": "billing@acme.com"
+}
+
+### Get tenant
+GET {{host}}/api/tenants/{{tenantId}}
+
+### ─── Plans ───
+
+### List available plans
+GET {{host}}/api/plans
+
+### ─── Subscriptions ───
+
+### Subscribe tenant to a plan
+POST {{host}}/api/tenants/{{tenantId}}/subscribe
+Content-Type: application/json
+
+{
+  "planId": "{{planId}}"
+}
+
+### Get active subscription
+GET {{host}}/api/tenants/{{tenantId}}/subscription
+
+### ─── Usage ───
+
+### Record usage event (idempotent)
+POST {{host}}/api/tenants/{{tenantId}}/usage
+Content-Type: application/json
+
+{
+  "idempotencyKey": "evt-2026-04-17-001",
+  "metric": "api_calls",
+  "quantity": 150
+}
+
+### Get current period usage summary (aggregated by metric)
+GET {{host}}/api/tenants/{{tenantId}}/usage/summary
+
+### Get recent usage events
+GET {{host}}/api/tenants/{{tenantId}}/usage/recent
+
+### ─── Invoices ───
+
+### Preview invoice for current period (dry run)
+GET {{host}}/api/subscriptions/{{subscriptionId}}/preview
+
+### Generate and issue invoice
+POST {{host}}/api/subscriptions/{{subscriptionId}}/invoice
+Content-Type: application/json
+
+### Get invoice history for tenant
+GET {{host}}/api/tenants/{{tenantId}}/invoices
+
+### Get invoice with line items
+GET {{host}}/api/invoices/{{invoiceId}}
+
+### Mark invoice as paid
+POST {{host}}/api/invoices/{{invoiceId}}/pay
+Content-Type: application/json
