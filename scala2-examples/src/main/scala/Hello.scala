@@ -1,6 +1,7 @@
 import cats.effect._
 
-import natchez.Trace.Implicits.noop // (1)                          // (1)
+import org.typelevel.otel4s.metrics.Meter.Implicits.{noop => noopMeter}
+import org.typelevel.otel4s.trace.Tracer.Implicits.{noop => noopTracer} // (1)
 import skunk._
 import skunk.codec.all._
 import skunk.implicits._

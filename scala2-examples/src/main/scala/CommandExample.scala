@@ -2,7 +2,8 @@ import cats.effect._
 import cats.syntax.all._
 import cats.Monad
 
-import natchez.Trace.Implicits.noop
+import org.typelevel.otel4s.metrics.Meter.Implicits.{noop => noopMeter}
+import org.typelevel.otel4s.trace.Tracer.Implicits.{noop => noopTracer}
 import skunk._
 import skunk.codec.all._
 import skunk.implicits._

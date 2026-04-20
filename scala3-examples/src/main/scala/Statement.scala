@@ -12,7 +12,7 @@ object Statement {
   ) {
 
     val codec: Codec[Todo.Data] =
-      (text ~ timestamp).gimap[Todo.Data]
+      (text *: timestamp).to[Todo.Data]
 
   }
 
@@ -21,7 +21,7 @@ object Statement {
   ) {
 
     val codec: Codec[Todo.Existing[UUID]] =
-      (uuid ~ Todo.Data.codec).gimap[Todo.Existing[UUID]]
+      (uuid *: Todo.Data.codec).to[Todo.Existing[UUID]]
 
   }
 

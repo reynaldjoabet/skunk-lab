@@ -8,7 +8,8 @@ import cats.effect.kernel.Temporal
 import cats.effect.IO
 import cats.effect.Resource
 
-import natchez.Trace.Implicits.noop
+import org.typelevel.otel4s.metrics.Meter.Implicits.{noop => noopMeter}
+import org.typelevel.otel4s.trace.Tracer.Implicits.{noop => noopTracer}
 import skunk.~
 import skunk.codec.AllCodecs
 import skunk.data.Notification
@@ -32,7 +33,6 @@ import skunk.PreparedQuery
 import skunk.Query
 import skunk.SSL
 import skunk.Session
-import skunk.SessionPool
 import skunk.SqlState
 import skunk.Statement
 import skunk.Transaction
@@ -42,7 +42,7 @@ import skunk.Void
 //Skunk currently supports the trust (no password necessary), password, md5 and scram-sha-256 authentication methods.
 object Main extends App {
 
-  val kunkConnectionPool: Resource[IO, Resource[IO, Session[IO]]] = Session.pooled[IO](
+  val skunkConnectionPool: Resource[IO, Resource[IO, Session[IO]]] = Session.pooled[IO](
     host = "localhost",
     port = 5432,
     user = "jimmy",

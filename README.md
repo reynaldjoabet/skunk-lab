@@ -1,251 +1,195 @@
-# Skunk-Examples
+# skunk-lab
+A financial ledger application (LedgerPay) built with Scala 3, Skunk v1.0.0, and Cats Effect. Demonstrates production patterns for Skunk's PostgreSQL wire protocol driver.
 
-`Skunk` is a functional data access layer for Postgres.
-Skunk doesn't use JDBC. It speaks the Postgres wire protocol. It will not work with any other database backend
-Statements  Skunk recognizes two classes of statements: `Query`, for statements that return rows; and `Command`, for statements that do not return rows. These values can be constructed directly but typically arise via the `sql` interpolator.
+## Skunk Fundamentals
+`Skunk` is a functional data access layer for Postgres. It speaks the Postgres wire protocol directly (no JDBC). It will not work with any other database backend.
 
-`Session` Skunk's central abstraction is the `Session`, which represents a connection to Postgres. From the `Session` we can produce prepared statements, cursors, and other resources that ultimately depend on their originating `Session`
-Skunk uses a Session object to represent a connection to the database.
+**Statements** — Skunk recognizes two classes of statements: `Query`, for statements that return rows; and `Command`, for statements that do not return rows. These values are typically constructed via the `sql` interpolator.
 
-Codecs When you construct a statement each parameter is specified via an `Encoder`, and row data is specified via a `Decoder`. In some cases encoders and decoders are symmetric and are defined together, as a `Codec`. There are many variants of this pattern in functional Scala libraries; this is closest in spirit to the strategy adopted by scodec.
+**Session** — Skunk's central abstraction is the `Session`, which represents a connection to Postgres. From the `Session` we can produce prepared statements, cursors, and other resources that ultimately depend on their originating `Session`.
 
-HLists This idea was borrowed from scodec. We use `~` to build left-associated nested pairs of values and types, and can destructure with `~` the same way.
+**Codecs** — When you construct a statement each parameter is specified via an `Encoder`, and row data is specified via a `Decoder`. In some cases encoders and decoders are symmetric and are defined together, as a `Codec`. This is closest in spirit to the strategy adopted by scodec.
+
+### Twiddle Lists (v1.0.0 — replaces `~` HLists)
+v1.0.0 standardizes on the `*:` twiddle-list syntax (from the Twiddles library) and deprecates the old `~` pair-based syntax:
 
 ```scala
-val a: Int ~ String ~ Boolean = 1 ~ "foo" ~ true
- a match { case n ~ s ~ b => ...}
- ```
-Skunk provides two types of queries: simple queries and prepared queries
+// v1.0.0 — twiddle list via *:
+val user: Decoder[User] =
+  (uuid *: varchar *: varchar *: kycLevel *: timestamptz *: timestamptz).to[User]
 
-A simple query is a query with no parameters.(Simple queries are queries that don’t contain any parameters and, generally, aren’t going to be reused.)
+// Deprecated — old ~ pair syntax
+// (uuid ~ varchar ~ varchar ~ kycLevel ~ timestamptz ~ timestamptz).gimap[User]
+```
 
-`Session` provides the following methods for direct execution of simple queries
-- `execute` returns	F[List[A]]:	All results, as a list.
-- `option` returns	F[Option[A]]: Zero or one result, otherwise an error is raised.
-- `unique`	returns F[A]: Exactly one result, otherwise an error is raised.
+### Simple Queries
+A simple query has no parameters and generally isn't going to be reused. `Session` provides:
+- `execute` returns `F[List[A]]`: All results, as a list.
+- `option` returns `F[Option[A]]`: Zero or one result, otherwise an error is raised.
+- `unique` returns `F[A]`: Exactly one result, otherwise an error is raised.
+
 ```scala
 def execute[A](query: Query[Void, A]): F[List[A]]
 def option[A](query: Query[Void, A]): F[Option[A]]
-
 def unique[A](query: Query[Void, A]): F[A]
 ```
 
-An extended query is a query with parameters, or a simple query that is executed via the extended query protocol.
+### Extended (Prepared) Queries
+An extended query is a query with parameters, executed via the extended query protocol. Postgres provides prepared statements that can be reused with different arguments, and cursors for paging/streaming.
 
-Postgres provides a protocol for executing extended queries which is more involved than simple query protocol. It provides for prepared statements that can be reused with different sets of arguments, and provides cursors which allow results to be paged and streamed.
+`PreparedQuery` provides:
 
-`PreparedQuery` provides the following methods for execution
-`stream`->	Stream[F,B]	: All results, as a stream.
-`option`->	F[Option[B]]:	Zero or one result, otherwise an error is raised.
-`unique`->	F[B]	:Exactly one result, otherwise an error is raised.
-`cursor`->	Resource[F,Cursor[F,B]]	:A cursor that returns pages of results.
-`pipe`->	Pipe[F, A, B]:	A pipe that executes the query for each input value, concatenating the results.
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `stream` | `Stream[F, B]` | All results, as a stream |
+| `option` | `F[Option[B]]` | Zero or one result |
+| `unique` | `F[B]` | Exactly one result |
+| `cursor` | `Resource[F, Cursor[F, B]]` | A cursor that returns pages of results |
+| `pipe` | `Pipe[F, A, B]` | Executes the query for each input value |
 
-only Query[A,B] and Command[A] can be turned into PreparedQuery
-```scala
-trait PreparedQuery[F[_], A, B] {
-def stream(args: A, chunkSize: Int)(implicit or: Origin): Stream[F, B]
-def option(args: A)(implicit or: Origin): F[Option[B]]
- def unique(args: A)(implicit or: Origin): F[B]
-def cursor(args: A)(implicit or: Origin): Resource[F, Cursor[F, B]]
-def pipe(chunkSize: Int)(implicit or: Origin): Pipe[F, A, B]
-}
-```
+Only `Query[A, B]` and `Command[A]` can be turned into prepared statements.
 
-## Summary of Query Types
-The simple query protocol (i.e., `Session#execute`) is slightly more efficient in terms of message exchange, so use it if:
+### When to Use Simple vs Extended
+**Simple query protocol** (`Session#execute`) — slightly more efficient in message exchange. Use when:
 - Your query has no parameters; and
 - you are querying for a small number of rows; and
 - you will be using the query only once per session.
 
-The extend query protocol (i.e., `Session#prepare`) is more powerful and more general, but requires additional network exchanges. Use it if:
+**Extended query protocol** (`Session#prepare`) — more powerful and general. Use when:
 - Your query has parameters; and/or
 - you are querying for a large or unknown number of rows; and/or
 - you intend to stream the results; and/or
 - you will be using the query more than once per session.
 
-profunctor can be contramapped to change the input type, and mapped to change the output type.
-
-## Heterogenous list, or HList
-represent lists of varying lengths with different element types
-`HList` type class provides a way to create a list of more than a single type. Remember that the `List` type class in Scala always provides a list of a specific type (e.g. List[Int]). With HList, we can create lists of more than a single type.
-
-[Shapeless and Scala3](http://www.limansky.me/posts/2021-07-26-from-scala-2-shapeless-to-scala-3.html)
-
-[Tuples in Scala3](https://www.scala-lang.org/2021/02/26/tuples-bring-generic-programming-to-scala-3.html)
-
-In Scala 2, we can access the elements by using the _1, _2 and so on. In Scala 3, we can access the tuple elements by its position, just like an Array or a List. Let's look at an example:
+## Key Patterns
+### Custom Enum Codecs
+The project uses Postgres custom enums with `TypingStrategy.SearchPath`:
 
 ```scala
-val tuple = ("This", "is", "Scala", 3, "Tuple")
-assert(tuple(0) == "This")
-assert(tuple(3) == 3)
-assert(tuple._1 == tuple(0))
+val accountStatus: Codec[AccountStatus] =
+  enum(_.label, AccountStatus.fromLabel, Type("account_status"))
+
+val currencyCode: Codec[CurrencyCode] =
+  enum(_.label, CurrencyCode.fromLabel, Type("currency_code"))
 ```
-
-
-implicit parameters in Scala2 are called context parameters in scala3
-
-
-Doobie uses shapeless in Scala2 but not in Scala3
-
-
-## Type class
+### Prepared Statement Construction via `mapN`
+Repos prepare all statements upfront and compose them with `mapN`:
 
 ```scala
-trait Sync[F[_]] extends MonadCancel[F, Throwable] with Clock[F] with Unique[F] with Defer[F] {}
-
-trait MonadCancel[F[_], E] extends MonadError[F, E] {}
-
-
-trait Clock[F[_]] extends ClockPlatform[F] with Serializable {
-}
-
-trait Unique[F[_]] extends Serializable {
-  def applicative: Applicative[F]
-  def unique: F[Unique.Token]
-}
-
-trait Defer[F[_]] extends Serializable {
-  def defer[A](fa: => F[A]): F[A]
-}
-trait MonadError[F[_], E] extends ApplicativeError[F, E] with Monad[F] {}
-
-
-trait Monad[F[_]] extends FlatMap[F] with Applicative[F] {}
-
-trait FlatMap[F[_]] extends Apply[F]
-trait ApplicativeError[F[_], E] extends Applicative[F] {}
-
-
-trait Applicative[F[_]] extends Apply[F] with InvariantMonoidal[F]
-
-trait Apply[F[_]] extends Functor[F]
-
-
-
-
-trait Async[F[_]] extends AsyncPlatform[F] with Sync[F] with Temporal[F] {}
-
-//A typeclass that encodes the notion of suspending fibers for a given duration
-trait GenTemporal[F[_], E] extends GenConcurrent[F, E] with Clock[F] {}
-
-trait GenConcurrent[F[_], E] extends GenSpawn[F, E] {}
-
-trait GenSpawn[F[_], E] extends MonadCancel[F, E] with Unique[F] {}
+def fromSession[F[_]: Concurrent](s: Session[F]): F[AccountRepo[F]] =
+  (
+    s.prepare(SQL.insert),
+    s.prepare(SQL.findById),
+    s.prepare(SQL.updateBalance),
+    s.prepare(SQL.freeze)
+  ).mapN { (pInsert, pFind, pUpdateBal, pFreeze) =>
+    new AccountRepo[F] { ... }
+  }
 ```
 
+### Serializable Transactions for Money Movement
+Transfers use `Serializable` isolation with deterministic lock ordering to prevent deadlocks:
 
-Products:
+```scala
+s.transaction(TransactionIsolationLevel.Serializable, TransactionAccessMode.ReadWrite)
+  .use { xa =>
+    val first  = if (req.fromAccountId.compareTo(req.toAccountId) < 0)
+                   req.fromAccountId else req.toAccountId
+    val second = if (req.fromAccountId.compareTo(req.toAccountId) < 0)
+                   req.toAccountId else req.fromAccountId
+    for {
+      _ <- accounts.findByIdForUpdate(first)   // lock in UUID order
+      _ <- accounts.findByIdForUpdate(second)
+      // ... validate, debit, credit, record
+    } yield tx
+  }
+```
+### Dynamic SQL with `AppliedFragment`
 
-ProductID (Primary Key)
-Name
-Description
-Price
-StockQuantity
-CategoryID (Foreign Key referencing Categories)
-ImageURL
-Categories:
+`TransactionSearchRepo` builds filterable, paginated queries safely:
 
-CategoryID (Primary Key)
-CategoryName
-Customers:
+```scala
+val conds: List[AppliedFragment] = List(
+  f.accountId.map(id => sql"(source_acct_id = $uuid OR dest_acct_id = $uuid)"((id, id))),
+  f.txType.map(t => sql"tx_type = $txType"(t)),
+  f.minAmount.map(min => sql"amount >= $numeric"(min)),
+).flatten
 
-CustomerID (Primary Key)
-FirstName
-LastName
-Email
-Password
-Address
-PhoneNumber
-Orders:
+val where = if (conds.isEmpty) AppliedFragment.empty
+            else conds.foldSmash(void" WHERE ", void" AND ", AppliedFragment.empty)
+```
 
-OrderID (Primary Key)
-CustomerID (Foreign Key referencing Customers)
-OrderDate
-TotalAmount
-ShippingAddress
-PaymentStatus
-OrderDetails:
+### LISTEN/NOTIFY for Real-Time Events
+`NotificationService` uses a dedicated session for `LISTEN` (never shared with query traffic):
 
-OrderDetailID (Primary Key)
-OrderID (Foreign Key referencing Orders)
-ProductID (Foreign Key referencing Products)
-Quantity
-UnitPrice
+```scala
+def make[F[_]: Concurrent](
+  listenerSession: Session[F],  // dedicated for LISTEN
+  writerSession:   Session[F]   // any session for NOTIFY
+): NotificationService[F]
+```
+
+### JSONB Audit Logging
+`AuditRepo` uses the circe `jsonb` codec for structured audit payloads:
+```scala
+import skunk.circe.codec.json.jsonb
+private val auditEntry: Decoder[AuditEntry] =
+  (int8 *: varchar *: uuid *: varchar *: uuid.opt *: jsonb.opt *: timestamptz).to[AuditEntry]
+```
+
+## Database Schema
+The schema uses custom enum types, foreign keys, and indexes:
+
+| Table | Purpose |
+|-------|---------|
+| `users` | User accounts with KYC levels |
+| `accounts` | Multi-currency accounts per user (unique per user+currency) |
+| `transactions` | Immutable ledger with idempotency keys |
+| `audit_log` | Append-only audit trail with JSONB payloads |
 
 Relationships:
+- `One-to-Many` between Users and Accounts (one user can have multiple currency accounts)
+- `One-to-Many` between Accounts and Transactions (via `source_acct_id` / `dest_acct_id`)
 
-One-to-Many relationship between Categories and Products (one category can have many products).
-One-to-Many relationship between Customers and Orders (one customer can place multiple orders).
-One-to-Many relationship between Orders and OrderDetails (one order can have multiple order details).
-Indexes:
-
-Index on ProductID in the Products table for faster product retrieval.
-Index on CategoryID in the Products table for efficient category-based queries.
-Index on CustomerID in the Orders table for quick retrieval of customer orders.
-Index on OrderID in the OrderDetails table for efficient retrieval of order details.
-
-
-
-In a many-to-one relationship, the foreign key is placed on the "many" side of the relationship to reference the "one" side.
-
-
-In a many-to-many relationship, an intermediary or junction table is used to connect the two entities involved. Let's consider an example using the Products and Orders tables in the context of an online merch store, where each order can contain multiple products, and each product can be a part of multiple orders.
-
-Create a junction table, often referred to as an "OrderDetails" table, to link products to orders. This table will include foreign keys referencing both the Products and Orders tables.
-
-```sql
-CREATE TABLE Products (
-    ProductID SERIAL PRIMARY KEY,
-    Name VARCHAR(255) NOT NULL,
-    Description TEXT,
-    Price DECIMAL(10, 2) NOT NULL,
-    StockQuantity INT NOT NULL
-    -- Other product-related columns
-);
-
-CREATE TABLE Orders (
-    OrderID SERIAL PRIMARY KEY,
-    CustomerID INT REFERENCES Customers(CustomerID), -- Foreign key referencing Customers table
-    OrderDate TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    TotalAmount DECIMAL(10, 2) NOT NULL,
-    ShippingAddress TEXT,
-    PaymentStatus VARCHAR(50) DEFAULT 'Pending'
-    -- Other order-related columns
-);
-
--- Junction table for the many-to-many relationship
-CREATE TABLE OrderDetails (
-    OrderDetailID SERIAL PRIMARY KEY,
-    OrderID INT REFERENCES Orders(OrderID),         -- Foreign key referencing Orders table
-    ProductID INT REFERENCES Products(ProductID),   -- Foreign key referencing Products table
-    Quantity INT NOT NULL,
-    UnitPrice DECIMAL(10, 2) NOT NULL
-    -- Other columns related to the association between products and orders
-);
-
-````
-
-
-- Postgres
-- Cockroach Db
-- AWS Aurora
-
-
-
-```scala
-
-final case class TradeRepositoryLive(postgres: Resource[Task, Session[Task]]) extends TradeRepository{
-
-}
-
+## Cats Effect Type Class Hierarchy
 ```
+Async
+├── Sync
+│   ├── MonadCancel[F, Throwable]
+│   │   ├── MonadError[F, Throwable]
+│   │   │   ├── ApplicativeError
+│   │   │   └── Monad
+│   │   │       ├── FlatMap
+│   │   │       └── Applicative
+│   │   └── Unique
+│   ├── Clock
+│   └── Defer
+└── Temporal
+    ├── GenConcurrent
+    │   └── GenSpawn
+    └── Clock
+```
+## References
+- [Skunk documentation](https://typelevel.org/skunk/)
+- [Skunk on Baeldung](https://www.baeldung.com/scala/skunk-postgresql-driver)
+- [Scala functional database libraries](https://medium.com/rahasak/scala-functional-database-libraries-31364b2cf7b2)
+- [Tuples in Scala 3](https://www.scala-lang.org/2021/02/26/tuples-bring-generic-programming-to-scala-3.html)
+- [From Shapeless to Scala 3](http://www.limansky.me/posts/2021-07-26-from-scala-2-shapeless-to-scala-3.html)
 
 
-CockroachDB supports the PostgreSQL wire protocol, so you can use any available PostgreSQL client drivers to connect from various languages.
+## Wallet
+Double-entry bookkeeping means every money movement is recorded as two entries that sum to zero:
+- A debit (money leaves one account)
+- A credit (money enters another account)
 
-https://aws.amazon.com/rds/aurora/
-[skunk](https://www.baeldung.com/scala/skunk-postgresql-driver)
+For example, if `User A` sends $50 to `User B`, the ledger records:
 
-[scala-functional-database-libraries](https://medium.com/rahasak/scala-functional-database-libraries-31364b2cf7b2)
+| Entry | Wallet   | Amount  | Type   |
+|-------|----------|---------|--------|
+| 1     | `User A` | −$50.00 | Debit  |
+| 2     | `User B` | +$50.00 | Credit |
+|       | **Net**  | **$0.00** |      |
+
+`ledger_entry_types` has just two values — `debit` and `credit`   
+
+`every money movement = 2 entries that sum to zero`

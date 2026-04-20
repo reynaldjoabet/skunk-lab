@@ -1,0 +1,126 @@
+---
+# SCOPE: This file controls CLUSTER PROVISIONING (infrastructure-level)
+#        K3s cluster creation, node pools, networking, etc.
+#
+# NOTE: For APPLICATION DEPLOYMENT controls (PostgreSQL, services, etc.), see:
+#   infra/deploy-control.yaml
+#
+# WORKFLOWS:
+#   - Cluster provisioning: .github/workflows/hetzner-k8s.yml (reads this file)
+#   - Resource deployment: .github/workflows/deploy-k8s-resources.yml (reads deploy-control.yaml)
+
+auto_deploy: false # Set to true to enable automatic deployment (NOT recommended for prod)
+hetzner_token: HETZNER_TOKEN # Will be replaced by GitHub Actions from secrets
+cluster_name: hetzner-prod-cluster
+kubeconfig_path: "./kubeconfig"
+k3s_version: v1.32.0+k3s1
+
+# Disable built-in Traefik (using Nginx Ingress instead)
+k3s_server_args:
+  - "--disable=traefik"
+
+networking:
+  ssh:
+    port: 22
+    use_agent: true
+    public_key_path: "~/.ssh/id_rsa.pub"
+    private_key_path: "~/.ssh/id_rsa"
+  allowed_networks:
+    ssh:
+      - 0.0.0.0/0 # TODO: Restrict to your IP after initial setup
+    api:
+      - 0.0.0.0/0 # TODO: Restrict to your IP after initial setup
+    # Custom firewall rules to ensure outbound access for image pulling
+    # IMPORTANT: Defining ANY outbound rule switches to deny-all by default
+    # These rules ensure nodes can pull images from public registries
+    custom_firewall_rules:
+      - description: "Allow all outbound traffic"
+        direction: out
+        protocol: tcp
+        port: any
+        destination_ips:
+          - 0.0.0.0/0
+      - description: "Allow all outbound UDP"
+        direction: out
+        protocol: udp
+        port: any
+        destination_ips:
+          - 0.0.0.0/0
+  public_network:
+    ipv4: true
+    ipv6: true
+  private_network:
+    enabled: true
+    subnet: 10.0.0.0/16
+  cni:
+    enabled: true
+    encryption: true
+    mode: flannel
+
+schedule_workloads_on_masters: false
+
+datastore:
+  mode: etcd
+
+masters_pool:
+  instance_type: cpx11
+  instance_count: 1
+  locations:
+    - ash
+
+worker_node_pools:
+  - name: small-static
+    instance_type: cpx21
+    instance_count: 1
+    location: ash
+  - name: medium-autoscaled
+    instance_type: cpx21
+    location: ash
+    autoscaling:
+      enabled: true
+      min_instances: 0
+      max_instances: 1
+
+protect_against_deletion: true
+
+embedded_registry_mirror:
+  enabled: true # Enables fast p2p distribution of container images between nodes for faster pod startup
+
+k3s_upgrade_concurrency: 1 # how many nodes to upgrade at the same time
+
+# Install cert-manager for automatic TLS certificate provisioning
+# Runs on first master node after k3s installation completes
+additional_post_k3s_commands:
+  - |
+    # Install cert-manager (only on first master to avoid race conditions)
+    if [ "$(hostname)" = "$(kubectl get nodes --selector='node-role.kubernetes.io/master' -o jsonpath='{.items[0].metadata.name}')" ]; then
+      echo "Installing cert-manager v1.13.3..."
+      kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.13.3/cert-manager.yaml
+      
+      echo "Waiting for cert-manager to be ready..."
+      kubectl wait --for=condition=Available --timeout=180s \
+        deployment/cert-manager \
+        deployment/cert-manager-cainjector \
+        deployment/cert-manager-webhook \
+        -n cert-manager
+      
+      echo "Creating Let's Encrypt ClusterIssuer..."
+      cat <<EOF | kubectl apply -f -
+    apiVersion: cert-manager.io/v1
+    kind: ClusterIssuer
+    metadata:
+      name: letsencrypt-prod
+    spec:
+      acme:
+        server: https://acme-v02.api.letsencrypt.org/directory
+        email: admin@cribstop.com
+        privateKeySecretRef:
+          name: letsencrypt-prod-account-key
+        solvers:
+          - http01:
+              ingress:
+                class: nginx
+    EOF
+      
+      echo "cert-manager installation complete!"
+    fi

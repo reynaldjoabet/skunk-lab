@@ -1,37 +1,89 @@
-// The simplest possible sbt build file is just one line:
+import Dependencies.*
+import Dependencies.Versions.*
 
-scalaVersion := "2.13.12"
+ThisBuild / scalaVersion := "3.3.7"
 
-name := "Skunk-Examples"
-
-version := "1.0"
-
-val skunk = "org.tpolecat" %% "skunk-core" % "0.6.2"
+ThisBuild / scalacOptions ++= Seq(
+  "-no-indent",
+  "-rewrite",
+  "-deprecation", // Warns about deprecated APIs
+  "-feature",     // Warns about advanced language features
+  "-unchecked",
+  // "-Wunused:imports",
+  //   "-Wunused:privates",
+  //   "-Wunused:locals",
+  //   "-Wunused:explicits",
+  //   "-Wunused:implicits",
+  //   "-Wunused:params",
+  //   "-Wvalue-discard",
+  "-language:strictEquality",
+  "-Xmax-inlines:100000"
+)
 
 lazy val `scala2-examples` = (project in file("scala2-examples")).settings(
-  scalaVersion         := "2.13.12",
-  libraryDependencies ++= Seq(skunk)
+  scalaVersion         := "2.13.18",
+  scalacOptions        := Seq(),
+  libraryDependencies ++= Seq(skunkCore)
 )
 
 lazy val `scala3-examples` = (project in file("scala3-examples")).settings(
-  scalaVersion         := "3.3.1",
-  libraryDependencies ++= Seq(skunk),
-  scalacOptions ++= Seq(
-    "-no-indent"
-  )
+  libraryDependencies ++= Seq(skunkCore, otelJava, otelExporterOtlp, otelSdkAutoconfigure)
 )
-// by default sbt run runs the program in the same JVM as sbt
-//in order to run the program in a different JVM, we add the following
-//fork in run := true
 
-scalacOptions += "-target:17" // ensures the Scala compiler generates bytecode optimized for the Java 17 virtual machine
+run / fork  := true
+javaOptions += "-Dotel.java.global-autoconfigure.enabled=true"
 
-//We can also set the soruce and target compatibility for the Java compiler by configuring the JavaOptions in build.sbt
+lazy val common = Seq(
+  skunkCore,
+  skunkCirce,
+  otelJava,
+  otelExporterOtlp,
+  otelSdkAutoconfigure,
+  http4sEmberServer,
+  http4sDsl,
+  http4sCirce,
+  circeGeneric,
+  circeParser,
+  refined
+)
 
-// javaOptions ++= Seq(
-//   "-soruce","17","target","17"
-// )
+lazy val ledgerpay = (project in file("ledgerpay")).settings(
+  name                 := "ledgerpay",
+  libraryDependencies ++= common,
+  run / fork           := true,
+  javaOptions          += "-Dotel.java.global-autoconfigure.enabled=true"
+)
 
-ThisBuild / semanticdbEnabled := true
+lazy val meterbill = (project in file("meterbill")).settings(
+  name                 := "meterbill",
+  libraryDependencies ++= common,
+  run / fork           := true
+)
 
-ThisBuild/usePipelining := true
+lazy val kudi = (project in file("kudi")).settings(
+  name                 := "kudi",
+  libraryDependencies ++= common,
+  run / fork           := true
+)
+
+lazy val `identity-management` = (project in file("identity-management")).settings(
+  name                 := "identity-management",
+  libraryDependencies ++= common,
+  run / fork           := true
+)
+
+lazy val root = (project in file("."))
+  .settings(
+    libraryDependencies ++= common,
+    name                 := "skunk-lab",
+    version              := "1.0",
+    publish / skip       := true
+  )
+  .aggregate(
+    `scala2-examples`,
+    `scala3-examples`,
+    ledgerpay,
+    meterbill,
+    kudi,
+    `identity-management`
+  )

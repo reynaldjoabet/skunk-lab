@@ -4,7 +4,7 @@ import cats.implicits._
 import cats.kernel.Semigroup
 import fs2.Stream
 
-import natchez.Trace.Implicits.noop
+import org.typelevel.otel4s.trace.Tracer.Implicits.noop
 import skunk._
 import skunk.codec.all._
 import skunk.data.Type
