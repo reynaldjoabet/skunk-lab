@@ -1,25 +1,29 @@
 import Dependencies.*
 import Dependencies.Versions.*
 
-ThisBuild / scalaVersion := "3.3.7"
+// ─── Common settings (bare = injected into ALL subprojects in sbt 2.x) ────────
+scalaVersion := "3.3.7"
 
-ThisBuild / scalacOptions ++= Seq(
-  "-no-indent",
-  "-rewrite",
-  "-deprecation", // Warns about deprecated APIs
-  "-feature",     // Warns about advanced language features
+scalacOptions ++= Seq(
+  "-no-indent", // enforce brace style (does NOT rewrite files)
+  "-deprecation",
+  "-feature",
   "-unchecked",
   // "-Wunused:imports",
-  //   "-Wunused:privates",
-  //   "-Wunused:locals",
-  //   "-Wunused:explicits",
-  //   "-Wunused:implicits",
-  //   "-Wunused:params",
-  //   "-Wvalue-discard",
+  // "-Wunused:privates",
+  // "-Wunused:locals",
+  // "-Wunused:explicits",
+  // "-Wunused:implicits",
+  // "-Wunused:params",
+  // "-Wvalue-discard",
   "-language:strictEquality",
   "-Xmax-inlines:100000"
 )
 
+run / fork  := true
+javaOptions += "-Dotel.java.global-autoconfigure.enabled=true"
+
+// ─── Subprojects ──────────────────────────────────────────────────────────────
 lazy val `scala2-examples` = (project in file("scala2-examples")).settings(
   scalaVersion         := "2.13.18",
   scalacOptions        := Seq(),
@@ -29,9 +33,6 @@ lazy val `scala2-examples` = (project in file("scala2-examples")).settings(
 lazy val `scala3-examples` = (project in file("scala3-examples")).settings(
   libraryDependencies ++= Seq(skunkCore, otelJava, otelExporterOtlp, otelSdkAutoconfigure)
 )
-
-run / fork  := true
-javaOptions += "-Dotel.java.global-autoconfigure.enabled=true"
 
 lazy val common = Seq(
   skunkCore,
@@ -49,41 +50,49 @@ lazy val common = Seq(
 
 lazy val ledgerpay = (project in file("ledgerpay")).settings(
   name                 := "ledgerpay",
-  libraryDependencies ++= common,
-  run / fork           := true,
-  javaOptions          += "-Dotel.java.global-autoconfigure.enabled=true"
+  libraryDependencies ++= common
 )
 
 lazy val meterbill = (project in file("meterbill")).settings(
   name                 := "meterbill",
-  libraryDependencies ++= common,
-  run / fork           := true
+  libraryDependencies ++= common
 )
 
 lazy val kudi = (project in file("kudi")).settings(
   name                 := "kudi",
-  libraryDependencies ++= common,
-  run / fork           := true
+  libraryDependencies ++= common
 )
 
 lazy val `identity-management` = (project in file("identity-management")).settings(
   name                 := "identity-management",
-  libraryDependencies ++= common,
-  run / fork           := true
+  libraryDependencies ++= common
 )
 
-lazy val root = (project in file("."))
+// rootProject = (project in file(".")), autoAggregate = discovers all subprojects automatically
+lazy val root = rootProject
+  .autoAggregate
   .settings(
     libraryDependencies ++= common,
     name                 := "skunk-lab",
     version              := "1.0",
     publish / skip       := true
   )
-  .aggregate(
-    `scala2-examples`,
-    `scala3-examples`,
-    ledgerpay,
-    meterbill,
-    kudi,
-    `identity-management`
-  )
+
+// ─── Remote Cache (pick ONE option, uncomment it) ─────────────────────────────
+
+// Option A: Self-hosted bazel-remote with mTLS
+// Global / remoteCache                     := Some(uri("grpcs://your-cache-host:2024"))
+// Global / remoteCacheTlsCertificate       := Some(file("/path/to/ca.crt"))
+// Global / remoteCacheTlsClientCertificate := Some(file("/path/to/client.crt"))
+// Global / remoteCacheTlsClientKey         := Some(file("/path/to/client.pem"))
+
+// Option B: NativeLink Cloud — $HOME/.sbt/nativelink_credential.txt: x-nativelink-api-key=*******
+// Global / remoteCache        := Some(uri("grpcs://something.build-faster.nativelink.net"))
+// Global / remoteCacheHeaders += IO.read(BuildPaths.defaultGlobalBase / "nativelink_credential.txt").trim
+
+// Option C: BuildBuddy Cloud — $HOME/.sbt/buildbuddy_credential.txt: x-buildbuddy-api-key=*******
+// Global / remoteCache        := Some(uri("grpcs://something.buildbuddy.io"))
+// Global / remoteCacheHeaders += IO.read(BuildPaths.defaultGlobalBase / "buildbuddy_credential.txt").trim
+
+// Option D: Dev/testing only (no auth, local)
+// Global / remoteCache := Some(uri("grpc://localhost:8080"))

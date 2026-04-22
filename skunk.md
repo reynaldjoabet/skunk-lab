@@ -549,7 +549,13 @@ pool.use { session =>        ← borrow a Session (= connection) from the pool
      ▼
 HTTP Response sent
 ```
-
 A session always wrap a TCP connection to Postgres. When you call `pool.use { session => ... }`, you are borrowing a session (and thus a connection) from the pool. If all sessions are currently in use, your call will semantically block until one is returned. Once you have the session, all queries/commands executed within that block use the same underlying connection. When the block finishes, the session is returned to the pool and recycled (idle check, `UNLISTEN *`, `RESET ALL`, etc.) before being made available for the next borrower.
 
 `.single` is `pooled(1).flatten` — a pool of size 1
+
+The process-to-core ratio tells you how many processes you can have per cpu core before you start hitting contention. The formula is `(CPU cores × 2) + effective_spindle_count`. For a 4-core Postgres server with SSD, the optimal pool size is around 9. If you set `pooled(50)` on a 4-core DB, you'll have 50 connections contending for CPU time, leading to thrashing and degraded performance. With `pooled(10)`, you have a small pool that allows Skunk's Deferred-based queue to handle back-pressure gracefully without overwhelming the database.
+
+Hikari documentation sggests  pool_size= `(CPU cores × 2) + effective_spindle_count` 
+
+- `core_count` = number of cpu cores( not threads,so divide by 2 if hyperthreading)
+- `effective_spindle_count` = 2 for SSDs, 1 for HDDs. number of active disk spindles. For cloud databases, treat this as 2 (since they use SSDs)
