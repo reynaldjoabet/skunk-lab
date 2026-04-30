@@ -17,25 +17,26 @@ trait TransferService[F[_]] {
 
 object TransferService {
 
-  sealed trait TransferError extends Throwable
+  enum TransferError(message: String) extends Exception(message) {
 
-  case class InsufficientFunds(accountId: UUID, available: BigDecimal, requested: BigDecimal)
-      extends Exception(s"Insufficient funds: available=$available, requested=$requested")
-      with TransferError
+    case InsufficientFunds(accountId: UUID, available: BigDecimal, requested: BigDecimal)
+        extends TransferError(s"Insufficient funds: available=$available, requested=$requested")
 
-  case class AccountNotFound(id: UUID)
-      extends Exception(s"Account $id not found")
-      with TransferError
+    case AccountNotFound(id: UUID) extends TransferError(s"Account $id not found")
 
-  case class AccountFrozen(id: UUID) extends Exception(s"Account $id is frozen") with TransferError
+    case AccountFrozen(id: UUID) extends TransferError(s"Account $id is frozen")
 
-  case class CurrencyMismatch(expected: CurrencyCode, actual: CurrencyCode)
-      extends Exception(s"Currency mismatch: expected=${expected.label}, actual=${actual.label}")
-      with TransferError
+    case CurrencyMismatch(expected: CurrencyCode, actual: CurrencyCode)
+        extends TransferError(
+          s"Currency mismatch: expected=${expected.label}, actual=${actual.label}"
+        )
 
-  case class DuplicateTransfer(key: String, existingTx: Transaction)
-      extends Exception(s"Duplicate idempotency key: $key")
-      with TransferError
+    case DuplicateTransfer(key: String, existingTx: Transaction)
+        extends TransferError(s"Duplicate idempotency key: $key")
+
+  }
+
+  export TransferError.*
 
   def fromSession[F[_]: Concurrent](s: Session[F]): F[TransferService[F]] =
     (AccountRepo.fromSession(s), TransactionRepo.fromSession(s)).mapN { (accounts, txns) =>

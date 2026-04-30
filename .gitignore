@@ -48,3 +48,5 @@ postgres-data
 /scala2-examples/target/
 
 /scala3-examples/target/
+
+.claude/

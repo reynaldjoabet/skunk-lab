@@ -9,68 +9,68 @@ import skunk.Codec
 
 // ─── Enums ───
 
-sealed abstract class AccountStatus(val label: String)
+enum AccountStatus(val label: String) derives CanEqual {
+
+  case Active extends AccountStatus("active")
+  case Frozen extends AccountStatus("frozen")
+  case Closed extends AccountStatus("closed")
+
+}
+
 object AccountStatus {
-
-  case object Active extends AccountStatus("active")
-  case object Frozen extends AccountStatus("frozen")
-  case object Closed extends AccountStatus("closed")
-  val values: List[AccountStatus]                 = List(Active, Frozen, Closed)
   def fromLabel(s: String): Option[AccountStatus] = values.find(_.label == s)
-  given CanEqual[AccountStatus, AccountStatus]    = CanEqual.derived
+}
+
+enum KycLevel(val label: String) derives CanEqual {
+
+  case None     extends KycLevel("none")
+  case Basic    extends KycLevel("basic")
+  case Verified extends KycLevel("verified")
+  case Enhanced extends KycLevel("enhanced")
 
 }
 
-sealed abstract class KycLevel(val label: String)
 object KycLevel {
-
-  case object None     extends KycLevel("none")
-  case object Basic    extends KycLevel("basic")
-  case object Verified extends KycLevel("verified")
-  case object Enhanced extends KycLevel("enhanced")
-  val values: List[KycLevel]                 = List(None, Basic, Verified, Enhanced)
   def fromLabel(s: String): Option[KycLevel] = values.find(_.label == s)
-  given CanEqual[KycLevel, KycLevel]         = CanEqual.derived
+}
+
+enum TxStatus(val label: String) derives CanEqual {
+
+  case Pending   extends TxStatus("pending")
+  case Completed extends TxStatus("completed")
+  case Failed    extends TxStatus("failed")
+  case Reversed  extends TxStatus("reversed")
 
 }
 
-sealed abstract class TxStatus(val label: String)
 object TxStatus {
-
-  case object Pending   extends TxStatus("pending")
-  case object Completed extends TxStatus("completed")
-  case object Failed    extends TxStatus("failed")
-  case object Reversed  extends TxStatus("reversed")
-  val values: List[TxStatus]                 = List(Pending, Completed, Failed, Reversed)
   def fromLabel(s: String): Option[TxStatus] = values.find(_.label == s)
-  given CanEqual[TxStatus, TxStatus]         = CanEqual.derived
+}
+
+enum TxType(val label: String) derives CanEqual {
+
+  case Deposit    extends TxType("deposit")
+  case Withdrawal extends TxType("withdrawal")
+  case Transfer   extends TxType("transfer")
+  case Fee        extends TxType("fee")
+  case Refund     extends TxType("refund")
 
 }
 
-sealed abstract class TxType(val label: String)
 object TxType {
-
-  case object Deposit    extends TxType("deposit")
-  case object Withdrawal extends TxType("withdrawal")
-  case object Transfer   extends TxType("transfer")
-  case object Fee        extends TxType("fee")
-  case object Refund     extends TxType("refund")
-  val values: List[TxType]                 = List(Deposit, Withdrawal, Transfer, Fee, Refund)
   def fromLabel(s: String): Option[TxType] = values.find(_.label == s)
-  given CanEqual[TxType, TxType]           = CanEqual.derived
+}
+
+enum CurrencyCode(val label: String) derives CanEqual {
+
+  case USD extends CurrencyCode("USD")
+  case EUR extends CurrencyCode("EUR")
+  case GBP extends CurrencyCode("GBP")
+  case CAD extends CurrencyCode("CAD")
+  case NGN extends CurrencyCode("NGN")
 
 }
 
-sealed abstract class CurrencyCode(val label: String)
 object CurrencyCode {
-
-  case object USD extends CurrencyCode("USD")
-  case object EUR extends CurrencyCode("EUR")
-  case object GBP extends CurrencyCode("GBP")
-  case object CAD extends CurrencyCode("CAD")
-  case object NGN extends CurrencyCode("NGN")
-  val values: List[CurrencyCode]                 = List(USD, EUR, GBP, CAD, NGN)
   def fromLabel(s: String): Option[CurrencyCode] = values.find(_.label == s)
-  given CanEqual[CurrencyCode, CurrencyCode]     = CanEqual.derived
-
 }

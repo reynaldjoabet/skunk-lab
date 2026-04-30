@@ -7,51 +7,55 @@ import io.circe.Json
 
 // ─── Enums ───
 
-sealed abstract class PlanTier(val label: String)
+enum PlanTier(val label: String) derives CanEqual {
+
+  case Free       extends PlanTier("free")
+  case Starter    extends PlanTier("starter")
+  case Pro        extends PlanTier("pro")
+  case Enterprise extends PlanTier("enterprise")
+
+}
+
 object PlanTier {
-
-  case object Free       extends PlanTier("free")
-  case object Starter    extends PlanTier("starter")
-  case object Pro        extends PlanTier("pro")
-  case object Enterprise extends PlanTier("enterprise")
-  val values: List[PlanTier]                 = List(Free, Starter, Pro, Enterprise)
   def fromLabel(s: String): Option[PlanTier] = values.find(_.label == s)
+}
+
+enum BillingPeriod(val label: String) derives CanEqual {
+
+  case Monthly extends BillingPeriod("monthly")
+  case Yearly  extends BillingPeriod("yearly")
 
 }
 
-sealed abstract class BillingPeriod(val label: String)
 object BillingPeriod {
-
-  case object Monthly extends BillingPeriod("monthly")
-  case object Yearly  extends BillingPeriod("yearly")
-  val values: List[BillingPeriod]                 = List(Monthly, Yearly)
   def fromLabel(s: String): Option[BillingPeriod] = values.find(_.label == s)
+}
+
+enum InvoiceStatus(val label: String) derives CanEqual {
+
+  case Draft         extends InvoiceStatus("draft")
+  case Open          extends InvoiceStatus("open")
+  case Paid          extends InvoiceStatus("paid")
+  case Void          extends InvoiceStatus("void")
+  case Uncollectible extends InvoiceStatus("uncollectible")
 
 }
 
-sealed abstract class InvoiceStatus(val label: String)
 object InvoiceStatus {
-
-  case object Draft         extends InvoiceStatus("draft")
-  case object Open          extends InvoiceStatus("open")
-  case object Paid          extends InvoiceStatus("paid")
-  case object Void          extends InvoiceStatus("void")
-  case object Uncollectible extends InvoiceStatus("uncollectible")
-  val values: List[InvoiceStatus]                 = List(Draft, Open, Paid, Void, Uncollectible)
   def fromLabel(s: String): Option[InvoiceStatus] = values.find(_.label == s)
+}
+
+enum SubStatus(val label: String) derives CanEqual {
+
+  case Active   extends SubStatus("active")
+  case PastDue  extends SubStatus("past_due")
+  case Canceled extends SubStatus("canceled")
+  case Trialing extends SubStatus("trialing")
 
 }
 
-sealed abstract class SubStatus(val label: String)
 object SubStatus {
-
-  case object Active   extends SubStatus("active")
-  case object PastDue  extends SubStatus("past_due")
-  case object Canceled extends SubStatus("canceled")
-  case object Trialing extends SubStatus("trialing")
-  val values: List[SubStatus]                 = List(Active, PastDue, Canceled, Trialing)
   def fromLabel(s: String): Option[SubStatus] = values.find(_.label == s)
-
 }
 
 // ─── Models ───
