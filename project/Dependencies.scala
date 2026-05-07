@@ -10,6 +10,7 @@ object Dependencies {
     val circeVersion    = "0.14.14"
     val http4sVersion   = "0.23.30"
     val refinedVersion  = "0.11.3"
+    val fs2Kafka        = "4.0.0"
 
   }
   lazy val skunkCore  = "org.tpolecat"  %% "skunk-core"      % Versions.skunkVersion
@@ -33,5 +34,7 @@ object Dependencies {
   lazy val circeParser        = circe("parser")
 
   lazy val refined = "eu.timepit" %% "refined" % Versions.refinedVersion
+
+  lazy val fs2Kafka = "org.typelevel" %% "fs2-kafka" % Versions.fs2Kafka
 
 }

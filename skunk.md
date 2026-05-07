@@ -559,3 +559,122 @@ Hikari documentation sggests  pool_size= `(CPU cores × 2) + effective_spindle_c
 
 - `core_count` = number of cpu cores( not threads,so divide by 2 if hyperthreading)
 - `effective_spindle_count` = 2 for SSDs, 1 for HDDs. number of active disk spindles. For cloud databases, treat this as 2 (since they use SSDs)
+
+### Postgres server tuning that skunk benefits from directly
+```sh
+-- session-level, set per-pool via withConnectionParameters or in postgresql.conf:
+
+plan_cache_mode = 'auto'        -- default; consider 'force_custom_plan' if your data is skewed
+jit = 'off'                     -- for OLTP under ~5ms queries, JIT overhead > gain
+synchronous_commit = 'on'       -- keep on for durability; 'off' only for non-critical writes
+plan_cache_mode — the biggest hidden footgun
+```
+```scala
+.withConnectionParameters(Session.DefaultConnectionParameters ++ Map(
+  "plan_cache_mode" -> "force_custom_plan",
+  ...
+))
+```
+
+### JVM flags that matter for skunk's hot path
+```sh
+-XX:+UseG1GC                                  # default on JDK 11+; fine
+-XX:MaxGCPauseMillis=50                       # tighter than the 200ms default
+-XX:+UseStringDeduplication                   # SQL strings live forever — dedupe them
+-XX:ReservedCodeCacheSize=512m                # skunk + fs2 + cats effect generates a lot of inlined code
+-XX:+AlwaysPreTouch                           # avoid first-page latency hits
+-Dcats.effect.tracing.mode=none               # in prod; tracing has measurable overhead
+-Dcats.effect.tracing.buffer.size=16          # if you keep tracing on
+```
+`cats.effect.tracing.mode=none` alone is often a 5–15% throughput bump on an IO-heavy service.
+
+### PgBouncer config that pairs with skunk
+
+```ini
+# pgbouncer.ini
+pool_mode = session              # NOT transaction — keeps prepared statements working
+default_pool_size = 50           # per database/user
+max_client_conn = 2000           # how many app connections can be parked
+server_idle_timeout = 600
+server_lifetime = 3600           # cycle backends to reclaim memory
+query_wait_timeout = 30          # match skunk's readTimeout
+tcp_keepalive = 1
+```
+If you must use `pool_mode = transaction` (cheaper, more multiplexing), set in your skunk builder:
+```scala
+.withCommandCacheSize(0)
+.withQueryCacheSize(0)
+.withParseCacheSize(0)
+```
+You lose prepared statement caching but each connection becomes truly stateless. Measure both — at very high concurrency, transaction mode + no cache often beats session mode + cache.
+
+###  Connection lifetime — recycle stale sockets
+Long-lived TCP connections die in subtle ways: load balancer idle timeouts, NAT table eviction, network blips that TCP keepalive doesn't catch fast enough. Skunk has no built-in max lifetime
+`rely on PgBouncer's server_lifetime to recycle backends.`
+
+`final case class Db(rw: SessionR[IO], ro: SessionR[IO])`
+
+The `default_transaction_read_only=on` makes accidental writes against the replica fail fast instead of silently going to primary on failover.
+
+### fs2 chunk and concurrency — the actual tuning knobs
+
+```scala
+src
+  .chunkN(1000)                      // pack
+  .parEvalMapUnordered(8)(batch =>   // 8 concurrent in-flight DB writes
+    sessions.use(_.prepareR(insertMany(batch.size)).use(_.execute(batch.toList)))
+  )
+```  
+### IAM / rotating credentials
+
+Skunk's `withCredentials` takes `F[Credentials]` (not just `Credentials`) — it's evaluated on every session checkout (Session.scala:487). That's the hook for short-lived tokens:
+```scala
+import software.amazon.awssdk.services.rds.RdsUtilities
+
+val freshToken: IO[Credentials] =
+  IO.blocking {
+    val token = rdsUtilities.generateAuthenticationToken(/* ... */)
+    Credentials("myapp_iam", Some(token))
+  }.timeout(2.seconds)
+
+Session.Builder[IO]
+  .withCredentials(freshToken)   // re-evaluated per session, so rotation is automatic
+  .pooled(12)
+```  
+Same pattern for Vault dynamic credentials, GCP IAM, Azure AD. Cache the token with a TTL slightly under its real lifetime (Ref + IO.realTime) — RDS IAM tokens cost a STS call each time otherwise.
+
+```scala
+package myapp
+
+import cats.effect._
+import com.comcast.ip4s._
+import myapp.db._
+import org.http4s.ember.server.EmberServerBuilder
+import org.typelevel.otel4s.oteljava.OtelJava
+import scala.concurrent.duration._
+
+object Main extends IOApp.Simple {
+
+  def run: IO[Unit] =
+    OtelJava.autoConfigured[IO]().use { otel =>
+      otel.tracerProvider.get("myapp").flatMap { implicit tracer =>
+        otel.meterProvider.get("myapp").flatMap { implicit meter =>
+          val program: Resource[IO, Unit] =
+            for {
+              cfg     <- Resource.eval(DbConfig.load.load[IO])
+              pools   <- Database.pools(cfg)
+              userRepo = new UserRepo(pools.rw, pools.ro)
+              healthz  = new Healthz(pools.ro)
+              _       <- EmberServerBuilder.default[IO]
+                           .withHost(host"0.0.0.0")
+                           .withPort(port"8080")
+                           .withHttpApp(Routes(userRepo, healthz).orNotFound)
+                           .withShutdownTimeout(10.seconds)
+                           .build
+            } yield ()
+          program.useForever
+        }
+      }
+    }
+}
+```

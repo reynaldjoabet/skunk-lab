@@ -50,3 +50,4 @@ postgres-data
 /scala3-examples/target/
 
 .claude/
+.mcp.json

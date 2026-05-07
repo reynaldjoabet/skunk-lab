@@ -41,4 +41,29 @@ object Main extends IOApp.Simple {
       }
   }
 
+  extension [A](res: => Resource[IO, A]) {
+
+    def tracedAcquire(
+      name: String
+    )(using
+      Tracer[IO]
+    ): Resource[IO, A] =
+      Tracer[IO]
+        .span(name + ".acquire")
+        .startUnmanaged
+        .toResource
+        .flatMap { span =>
+          Resource.applyFull { poll =>
+            Tracer[IO]
+              .childScope(span.context)(poll(IO.defer(res.allocatedCase)))
+              .guaranteeCase {
+                case Outcome.Succeeded(_) => span.end
+                case Outcome.Errored(e)   => span.recordException(e) *> span.end
+                case Outcome.Canceled()   => span.end
+              }
+          }
+        }
+
+  }
+
 }

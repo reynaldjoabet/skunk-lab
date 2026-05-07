@@ -22,6 +22,11 @@ scalacOptions ++= Seq(
 
 run / fork  := true
 javaOptions += "-Dotel.java.global-autoconfigure.enabled=true"
+javaOptions += "-Dotel.exporter.otlp.endpoint=https://api.eu1.honeycomb.io"
+javaOptions += "-Dotel.logs.exporter=otlp"
+javaOptions += "-Dotel.bsp.schedule.delay=1000"
+javaOptions += "-Dotel.instrumentation.runtime-telemetry.emit-experimental-metrics=true"
+javaOptions += "-Dotel.instrumentation.runtime-telemetry.emit-experimental-jfr-metrics=true"
 
 // ─── Subprojects ──────────────────────────────────────────────────────────────
 lazy val `scala2-examples` = (project in file("scala2-examples")).settings(
@@ -48,25 +53,42 @@ lazy val common = Seq(
   refined
 )
 
-lazy val ledgerpay = (project in file("ledgerpay")).settings(
-  name                 := "ledgerpay",
-  libraryDependencies ++= common
+// Settings applied to runnable services: propagate javaOptions into the
+// packaged Universal stage so `bin/<app>` scripts pick them up at runtime.
+// Once sbt-javaagent ships an sbt 2.x build, uncomment the `javaAgents`
+// line below and re-enable `JavaAgent` on each project's `enablePlugins`.
+lazy val deploySettings = Seq(
+  Universal / javaOptions ++= javaOptions.value
+  // javaAgents += "io.github.irevive" % "otel4s-opentelemetry-javaagent" % "2.27.0" % Runtime
 )
 
-lazy val meterbill = (project in file("meterbill")).settings(
-  name                 := "meterbill",
-  libraryDependencies ++= common
-)
+lazy val ledgerpay = (project in file("ledgerpay"))
+  .enablePlugins(JavaAppPackaging) // add JavaAgent once sbt-javaagent supports sbt 2.x
+  .settings(
+    name                 := "ledgerpay",
+    libraryDependencies ++= common
+  ).settings(deploySettings*)
 
-lazy val kudi = (project in file("kudi")).settings(
-  name                 := "kudi",
-  libraryDependencies ++= common
-)
+lazy val meterbill = (project in file("meterbill"))
+  .enablePlugins(JavaAppPackaging) // add JavaAgent once sbt-javaagent supports sbt 2.x
+  .settings(
+    name                 := "meterbill",
+    libraryDependencies ++= common
+  ).settings(deploySettings*)
 
-lazy val `identity-management` = (project in file("identity-management")).settings(
-  name                 := "identity-management",
-  libraryDependencies ++= common
-)
+lazy val kudi = (project in file("kudi"))
+  .enablePlugins(JavaAppPackaging) // add JavaAgent once sbt-javaagent supports sbt 2.x
+  .settings(
+    name                 := "kudi",
+    libraryDependencies ++= common
+  ).settings(deploySettings*)
+
+lazy val `identity-management` = (project in file("identity-management"))
+  .enablePlugins(JavaAppPackaging) // add JavaAgent once sbt-javaagent supports sbt 2.x
+  .settings(
+    name                 := "identity-management",
+    libraryDependencies ++= common
+  ).settings(deploySettings*)
 
 // rootProject = (project in file(".")), autoAggregate = discovers all subprojects automatically
 lazy val root = rootProject
