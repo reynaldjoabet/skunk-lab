@@ -455,3 +455,45 @@ GRANT SELECT ON monitor.ddl_audit_log TO dba_admin;
 -- =============================================================================
 -- Run on standby after slot sync is established:
 --   SELECT * FROM monitor.replication_status;
+
+GRANT pg_monitor TO kudi_metrics;
+
+GRANT USAGE ON SCHEMA public, auth TO kudi_metrics;
+
+GRANT SELECT ON TABLE
+  users,
+  wallets,
+  transactions,
+  ledger_entries,
+  kyc_documents,
+  auth.sessions,
+  auth.login_attempts,
+  auth.api_keys
+TO kudi_metrics;
+
+ALTER ROLE kudi_metrics SET statement_timeout = '10s';
+ALTER ROLE kudi_metrics SET idle_in_transaction_session_timeout = '10s';
+ALTER ROLE kudi_metrics SET lock_timeout = '2s';
+
+
+CREATE ROLE kudi_metrics LOGIN PASSWORD 'replace-me';
+
+GRANT pg_monitor TO kudi_metrics;
+
+GRANT USAGE ON SCHEMA public, auth TO kudi_metrics;
+
+GRANT SELECT ON TABLE
+  users,
+  wallets,
+  transactions,
+  ledger_entries,
+  kyc_documents,
+  auth.sessions,
+  auth.login_attempts,
+  auth.api_keys
+TO kudi_metrics;
+
+ALTER ROLE kudi_metrics SET statement_timeout = '10s';
+ALTER ROLE kudi_metrics SET lock_timeout = '2s';
+ALTER ROLE kudi_metrics SET idle_in_transaction_session_timeout = '10s';
+ALTER ROLE kudi_metrics SET application_name = 'kudi-db-metrics-collector';

@@ -15,7 +15,7 @@ object ErrorHandler {
   def handle[F[_]: Concurrent](f: F[Response[F]]): F[Response[F]] =
     f.handleErrorWith {
       case e: MeteringService.NoActiveSubscription =>
-        Response[F](Status.UnprocessableEntity).withEntity(ErrorResp(e.getMessage)).pure[F]
+        Response[F](Status.UnprocessableContent).withEntity(ErrorResp(e.getMessage)).pure[F]
       case e: MeteringService.DuplicateEvent =>
         Response[F](Status.Conflict).withEntity(ErrorResp(e.getMessage)).pure[F]
       case e: BillingService.SubNotFound =>

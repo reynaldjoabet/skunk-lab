@@ -2,39 +2,75 @@ import sbt.*
 
 object Dependencies {
 
-  object Versions {
+  private object Version {
 
-    val skunkVersion    = "1.0.0"
-    val otel4sVersion   = "0.16.0"
-    val otelJavaVersion = "1.55.0"
-    val circeVersion    = "0.14.14"
-    val http4sVersion   = "0.23.30"
-    val refinedVersion  = "0.11.3"
-    val fs2Kafka        = "4.0.0"
+    val http4s     = "0.23.34"
+    val circe      = "0.14.15"
+    val skunk      = "1.1.0-RC1"
+    val otel4s     = "0.16.0"
+    val otelJava   = "1.55.0" // OpenTelemetry Java SDK runtime exporters
+    val tapir      = "1.13.18"
+    val iron       = "3.3.1"
+    val pureconfig = "0.17.10"
+    val jsoniter   = "2.38.12"
 
   }
-  lazy val skunkCore  = "org.tpolecat"  %% "skunk-core"      % Versions.skunkVersion
-  lazy val skunkCirce = "org.tpolecat"  %% "skunk-circe"     % Versions.skunkVersion
-  lazy val otelJava   = "org.typelevel" %% "otel4s-oteljava" % Versions.otel4sVersion
 
-  lazy val otelExporterOtlp = "io.opentelemetry" % "opentelemetry-exporter-otlp" % Versions
-    .otelJavaVersion % Runtime
+  // ─── Helpers ─────────────────────────────────────────────────────────
+  private def http4s(a: String) =
+    "org.http4s" %% s"http4s-$a" % Version.http4s
 
-  lazy val otelSdkAutoconfigure =
-    "io.opentelemetry" % "opentelemetry-sdk-extension-autoconfigure" % Versions
-      .otelJavaVersion % Runtime
+  private def circe(a: String) =
+    "io.circe" %% s"circe-$a" % Version.circe
 
-  def http4s(artifact: String) = "org.http4s" %% s"http4s-$artifact" % Versions.http4sVersion
-  lazy val http4sEmberServer   = http4s("ember-server")
-  lazy val http4sDsl           = http4s("dsl")
-  lazy val http4sCirce         = http4s("circe")
+  private def tapir(a: String) =
+    "com.softwaremill.sttp.tapir" %% s"tapir-$a" % Version.tapir
 
-  def circe(artifact: String) = "io.circe" %% s"circe-$artifact" % Versions.circeVersion
-  lazy val circeGeneric       = circe("generic")
-  lazy val circeParser        = circe("parser")
+  // ─── DB ──────────────────────────────────────────────────────────────
+  lazy val skunkCore  = "org.tpolecat" %% "skunk-core"  % Version.skunk
+  lazy val skunkCirce = "org.tpolecat" %% "skunk-circe" % Version.skunk
 
-  lazy val refined = "eu.timepit" %% "refined" % Versions.refinedVersion
+  // ─── HTTP ────────────────────────────────────────────────────────────
+  lazy val http4sEmberServer = http4s("ember-server")
+  lazy val http4sDsl         = http4s("dsl")
+  lazy val http4sCirce       = http4s("circe")
 
-  lazy val fs2Kafka = "org.typelevel" %% "fs2-kafka" % Versions.fs2Kafka
+  // ─── JSON ────────────────────────────────────────────────────────────
+  lazy val circeGeneric = circe("generic")
+  lazy val circeParser  = circe("parser")
+
+  // ─── Observability ───────────────────────────────────────────────────
+  lazy val otelJava = "org.typelevel" %% "otel4s-oteljava" % Version.otel4s
+
+  lazy val otelExporterOtlp =
+    "io.opentelemetry" % "opentelemetry-exporter-otlp" % Version.otelJava % Runtime
+
+  // ─── Tapir ───────────────────────────────────────────────────────────
+  lazy val tapirCore   = tapir("core")
+  lazy val tapirServer = tapir("server")
+
+  // ─── Refined types ───────────────────────────────────────────────────
+  private def iron(a: String) =
+    "io.github.iltotore" %% s"iron-$a" % Version.iron
+
+  lazy val iron           = "io.github.iltotore" %% "iron" % Version.iron
+  lazy val ironSkunk      = iron("skunk")
+  lazy val ironPureconfig = iron("pureconfig")
+  lazy val ironJsoniter   = iron("jsoniter")
+  lazy val ironScalacheck = iron("scalacheck")
+
+  // ─── Config ──────────────────────────────────────────────────────────
+  lazy val pureconfig =
+    "com.github.pureconfig" %% "pureconfig-core" % Version.pureconfig
+
+  lazy val pureconfigGeneric =
+    "com.github.pureconfig" %% "pureconfig-generic-scala3" % Version.pureconfig
+
+  // ─── JSON (jsoniter-scala) ───────────────────────────────────────────
+  lazy val jsoniterCore =
+    "com.github.plokhotnyuk.jsoniter-scala" %% "jsoniter-scala-core" % Version.jsoniter
+
+  lazy val jsoniterMacros =
+    "com.github.plokhotnyuk.jsoniter-scala" %% "jsoniter-scala-macros" % Version.jsoniter % Provided
 
 }

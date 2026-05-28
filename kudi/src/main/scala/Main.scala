@@ -6,6 +6,8 @@ import cats.effect.*
 import cats.syntax.all.*
 import fs2.io.net.Network
 
+import org.typelevel.log4cats.slf4j.Slf4jLogger
+import org.typelevel.log4cats.Logger
 import org.typelevel.otel4s.metrics.Meter
 import org.typelevel.otel4s.oteljava.OtelJava
 import org.typelevel.otel4s.trace.Tracer
@@ -49,6 +51,7 @@ object Main extends IOApp {
       .use { case (tracer, meter) =>
         given Tracer[IO] = tracer
         given Meter[IO]  = meter
+        given Logger[IO] = Slf4jLogger.getLogger[IO]
 
         val app = for {
           pools <- DbPools.make[IO](config)

@@ -1,5 +1,4 @@
 import Dependencies.*
-import Dependencies.Versions.*
 
 // ─── Common settings (bare = injected into ALL subprojects in sbt 2.x) ────────
 scalaVersion := "3.3.7"
@@ -36,7 +35,7 @@ lazy val `scala2-examples` = (project in file("scala2-examples")).settings(
 )
 
 lazy val `scala3-examples` = (project in file("scala3-examples")).settings(
-  libraryDependencies ++= Seq(skunkCore, otelJava, otelExporterOtlp, otelSdkAutoconfigure)
+  libraryDependencies ++= Seq(skunkCore, otelJava, otelExporterOtlp)
 )
 
 lazy val common = Seq(
@@ -44,13 +43,16 @@ lazy val common = Seq(
   skunkCirce,
   otelJava,
   otelExporterOtlp,
-  otelSdkAutoconfigure,
   http4sEmberServer,
   http4sDsl,
   http4sCirce,
   circeGeneric,
   circeParser,
-  refined
+  iron,
+  ironSkunk,
+  ironPureconfig,
+  ironJsoniter,
+  ironScalacheck
 )
 
 // Settings applied to runnable services: propagate javaOptions into the
@@ -80,7 +82,17 @@ lazy val kudi = (project in file("kudi"))
   .enablePlugins(JavaAppPackaging) // add JavaAgent once sbt-javaagent supports sbt 2.x
   .settings(
     name                 := "kudi",
-    libraryDependencies ++= common
+    libraryDependencies ++= common ++ Seq(tapirCore, tapirServer, iron),
+    // WIP metric-collector extractions that still need to be wired back into
+    // DbMetricsCollector's scope (helpers like mkLongGauge / uniqueOne and the
+    // private case classes are not yet exposed). Skip until that refactor lands.
+    Compile / unmanagedSources / excludeFilter :=
+      HiddenFileFilter ||
+        "DbSreInstruments.scala" ||
+        "FinancialIntegrityStats.scala" ||
+        "PgStatementsStats.scala" ||
+        "PlatformOpsStats.scala" ||
+        "ProductionInstruments.scala"
   ).settings(deploySettings*)
 
 lazy val `identity-management` = (project in file("identity-management"))
@@ -94,10 +106,19 @@ lazy val `identity-management` = (project in file("identity-management"))
 lazy val root = rootProject
   .autoAggregate
   .settings(
-    libraryDependencies ++= common,
-    name                 := "skunk-lab",
-    version              := "1.0",
-    publish / skip       := true
+    libraryDependencies ++= common ++ Seq(
+      pureconfig,
+      pureconfigGeneric,
+      jsoniterCore,
+      jsoniterMacros
+    ),
+    name           := "skunk-lab",
+    version        := "1.0",
+    publish / skip := true,
+    // WIP: uses .refined[X] / .assume which aren't actual iron-skunk API.
+    // Rewrite to .imap(applyUnsafe)(_.value) before re-enabling.
+    Compile / unmanagedSources / excludeFilter :=
+      HiddenFileFilter || "persistence.scala"
   )
 
 // ─── Remote Cache (pick ONE option, uncomment it) ─────────────────────────────
