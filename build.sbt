@@ -1,7 +1,7 @@
 import Dependencies.*
 
 // ─── Common settings (bare = injected into ALL subprojects in sbt 2.x) ────────
-scalaVersion := "3.3.7"
+scalaVersion := "3.3.8"
 
 scalacOptions ++= Seq(
   "-no-indent", // enforce brace style (does NOT rewrite files)
