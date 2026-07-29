@@ -44,7 +44,7 @@ object Instrumented {
       .span(spanName, attrs*)
       .surround {
         for {
-          start <- Clock[F].monotonic
+          start  <- Clock[F].monotonic
           result <- fa.onError { case err: Throwable =>
                       for {
                         end    <- Clock[F].monotonic
@@ -52,7 +52,7 @@ object Instrumented {
                         opAttr  = Attribute("operation", spanName)
                         _      <- metrics.latency.record(elapsed, opAttr)
                         _      <- metrics.errors.add(1L, opAttr)
-                        _ <- Tracer[F]
+                        _      <- Tracer[F]
                                .currentSpanOrNoop
                                .flatMap { span =>
                                  span.addAttribute(Attribute("error", true)) *>

@@ -45,7 +45,7 @@ object VelocityService {
           additionalAmount: BigDecimal
         ): F[Either[String, Unit]] =
           for {
-            kyc <- pKyc.unique(accountId)
+            kyc   <- pKyc.unique(accountId)
             limits = kyc match {
                        case KycLevel.Verified =>
                          TransferLimits(BigDecimal(100000), BigDecimal(1000000))

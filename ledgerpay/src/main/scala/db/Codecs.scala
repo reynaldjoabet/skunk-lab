@@ -31,12 +31,14 @@ object Codecs {
     (uuid *: varchar *: varchar *: kycLevel *: timestamptz *: timestamptz).to[User]
 
   val account: Decoder[Account] =
-    (uuid *: uuid *: currencyCode *: numeric *: accountStatus *: timestamptz *: timestamptz)
-      .to[Account]
+    (uuid *: uuid *: currencyCode *: numeric *: accountStatus *: timestamptz *: timestamptz).to[
+      Account
+    ]
 
   val transaction: Decoder[ledgerpay.domain.Transaction] =
     (uuid *: varchar *: txType *: txStatus *: uuid.opt *: uuid.opt *:
-      numeric *: currencyCode *: text.opt *: timestamptz *: timestamptz.opt)
-      .to[ledgerpay.domain.Transaction]
+      numeric *: currencyCode *: text.opt *: timestamptz *: timestamptz.opt).to[
+      ledgerpay.domain.Transaction
+    ]
 
 }

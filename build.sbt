@@ -1,23 +1,28 @@
 import Dependencies.*
 
 // ─── Common settings (bare = injected into ALL subprojects in sbt 2.x) ────────
-scalaVersion := "3.3.8"
+scalaVersion                  := "3.3.8"
+ThisBuild / semanticdbEnabled := true
 
-scalacOptions ++= Seq(
-  "-no-indent", // enforce brace style (does NOT rewrite files)
+ThisBuild / scalacOptions := Seq(
+  "-encoding",
+  "UTF-8",
+  "-no-indent",
   "-deprecation",
   "-feature",
   "-unchecked",
-  // "-Wunused:imports",
-  // "-Wunused:privates",
-  // "-Wunused:locals",
-  // "-Wunused:explicits",
-  // "-Wunused:implicits",
-  // "-Wunused:params",
-  // "-Wvalue-discard",
-  "-language:strictEquality",
-  "-Xmax-inlines:100000"
+  "-source:3.3",
+  "-java-output-version:17",
+  "-Werror",
+  "-Wvalue-discard",
+  "-Wnonunit-statement",
+  "-Xlint:all",
+  "-Ysafe-init",
+  "-Xcheck-macros",
+  "-Xmax-inlines:64"
 )
+
+Global / onChangedBuildSource := ReloadOnSourceChanges
 
 run / fork  := true
 javaOptions += "-Dotel.java.global-autoconfigure.enabled=true"
@@ -69,14 +74,16 @@ lazy val ledgerpay = (project in file("ledgerpay"))
   .settings(
     name                 := "ledgerpay",
     libraryDependencies ++= common
-  ).settings(deploySettings*)
+  )
+  .settings(deploySettings *)
 
 lazy val meterbill = (project in file("meterbill"))
   .enablePlugins(JavaAppPackaging) // add JavaAgent once sbt-javaagent supports sbt 2.x
   .settings(
     name                 := "meterbill",
     libraryDependencies ++= common
-  ).settings(deploySettings*)
+  )
+  .settings(deploySettings *)
 
 lazy val kudi = (project in file("kudi"))
   .enablePlugins(JavaAppPackaging) // add JavaAgent once sbt-javaagent supports sbt 2.x
@@ -93,14 +100,16 @@ lazy val kudi = (project in file("kudi"))
         "PgStatementsStats.scala" ||
         "PlatformOpsStats.scala" ||
         "ProductionInstruments.scala"
-  ).settings(deploySettings*)
+  )
+  .settings(deploySettings *)
 
 lazy val `identity-management` = (project in file("identity-management"))
   .enablePlugins(JavaAppPackaging) // add JavaAgent once sbt-javaagent supports sbt 2.x
   .settings(
     name                 := "identity-management",
     libraryDependencies ++= common
-  ).settings(deploySettings*)
+  )
+  .settings(deploySettings *)
 
 // rootProject = (project in file(".")), autoAggregate = discovers all subprojects automatically
 lazy val root = rootProject

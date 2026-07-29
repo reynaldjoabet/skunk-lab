@@ -100,7 +100,7 @@ object PoolMetrics {
               elapsed = (end - start).toUnit(MILLISECONDS)
               _      <- metrics.acquisitionTime.record(elapsed, poolAttr)
               _      <- metrics.checkedOut.add(1L, poolAttr)
-              _ <- Tracer[F]
+              _      <- Tracer[F]
                      .currentSpanOrNoop
                      .flatMap(
                        _.addAttribute(Attribute("db.pool.acquisition_time_ms", elapsed))

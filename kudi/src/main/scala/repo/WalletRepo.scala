@@ -50,8 +50,9 @@ object WalletRepo {
       sql"SELECT #$cols FROM wallets WHERE user_id = $int8 ORDER BY created_at".query(wallet)
 
     val findByUserAndCurrency: Query[Long *: String *: EmptyTuple, Wallet] =
-      sql"SELECT #$cols FROM wallets WHERE user_id = $int8 AND currency_code = $bpchar(3)"
-        .query(wallet)
+      sql"SELECT #$cols FROM wallets WHERE user_id = $int8 AND currency_code = $bpchar(3)".query(
+        wallet
+      )
 
     val debit =
       sql"""
@@ -120,7 +121,7 @@ object WalletRepo {
             .option((amount, amount, id, amount))
             .flatMap {
               case Some(w) => w.pure[F]
-              case None =>
+              case None    =>
                 MonadCancelThrow[F].raiseError(
                   new Exception(s"Debit failed: wallet $id insufficient funds or not active")
                 )
@@ -133,9 +134,10 @@ object WalletRepo {
             .option((amount, amount, id))
             .flatMap {
               case Some(w) => w.pure[F]
-              case None =>
-                MonadCancelThrow[F]
-                  .raiseError(new Exception(s"Credit failed: wallet $id not active"))
+              case None    =>
+                MonadCancelThrow[F].raiseError(
+                  new Exception(s"Credit failed: wallet $id not active")
+                )
             }
         )
 

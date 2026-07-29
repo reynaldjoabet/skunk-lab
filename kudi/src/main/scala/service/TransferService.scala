@@ -26,7 +26,7 @@ object TransferService {
     m: Meter[F]
   ): F[TransferService[F]] =
     for {
-      met <- Instrumented.makeMetrics[F]("service.transfer")
+      met      <- Instrumented.makeMetrics[F]("service.transfer")
       txnCount <- m.counter[Long]("service.transfer.completed")
                     .withUnit("{transactions}")
                     .withDescription("Completed transfer count by type")
@@ -49,7 +49,7 @@ object TransferService {
         ) {
           for {
             existing <- txns.findByReference(req.referenceId)
-            txn <- existing match {
+            txn      <- existing match {
                      case Some(t) => t.pure[F]
                      case None    => doTransfer(req)
                    }
@@ -126,11 +126,11 @@ object TransferService {
         ) {
           for {
             existing <- txns.findByReference(req.referenceId)
-            txn <- existing match {
+            txn      <- existing match {
                      case Some(t) => t.pure[F]
-                     case None =>
+                     case None    =>
                        for {
-                         _ <- wallets.findByIdForUpdate(req.destWalletId)
+                         _   <- wallets.findByIdForUpdate(req.destWalletId)
                          txn <- txns.create(
                                   sourceWalletId = None,
                                   destWalletId = Some(req.destWalletId),
@@ -144,7 +144,7 @@ object TransferService {
                                   ipAddress = None
                                 )
                          credited <- wallets.credit(req.destWalletId, req.amount)
-                         _ <- ledger.insertEntry(
+                         _        <- ledger.insertEntry(
                                 txnId = txn.txnId,
                                 txnCreatedAt = txn.createdAt,
                                 walletId = req.destWalletId,
@@ -170,11 +170,11 @@ object TransferService {
         ) {
           for {
             existing <- txns.findByReference(req.referenceId)
-            txn <- existing match {
+            txn      <- existing match {
                      case Some(t) => t.pure[F]
-                     case None =>
+                     case None    =>
                        for {
-                         _ <- wallets.findByIdForUpdate(req.sourceWalletId)
+                         _   <- wallets.findByIdForUpdate(req.sourceWalletId)
                          txn <- txns.create(
                                   sourceWalletId = Some(req.sourceWalletId),
                                   destWalletId = None,
@@ -188,7 +188,7 @@ object TransferService {
                                   ipAddress = None
                                 )
                          debited <- wallets.debit(req.sourceWalletId, req.amount)
-                         _ <- ledger.insertEntry(
+                         _       <- ledger.insertEntry(
                                 txnId = txn.txnId,
                                 txnCreatedAt = txn.createdAt,
                                 walletId = req.sourceWalletId,

@@ -81,7 +81,7 @@ object DbMetricsCollector {
   )(using meter: Meter[F]): Resource[F, LongGauge[F]] =
     for {
       ref <- Resource.eval(Ref.of[F, Long](0L))
-      _ <- meter
+      _   <- meter
              .observableGauge[Double](name)
              .withUnit(unit)
              .withDescription(description)
@@ -97,7 +97,7 @@ object DbMetricsCollector {
   )(using meter: Meter[F]): Resource[F, DoubleGauge[F]] =
     for {
       ref <- Resource.eval(Ref.of[F, Double](0.0))
-      _ <- meter
+      _   <- meter
              .observableGauge[Double](name)
              .withUnit(unit)
              .withDescription(description)
@@ -459,7 +459,7 @@ object DbMetricsCollector {
       tupUpdated  <- mkDeltaCounter("db.pg.rows.updated", "{rows}", "Rows updated by PostgreSQL")
       tupDeleted  <- mkDeltaCounter("db.pg.rows.deleted", "{rows}", "Rows deleted by PostgreSQL")
 
-      dbSize <- mkLongGauge("db.pg.database_size", "By", "Current PostgreSQL database size")
+      dbSize       <- mkLongGauge("db.pg.database_size", "By", "Current PostgreSQL database size")
       oldestTxnAge <-
         mkLongGauge("db.pg.oldest_txn_age", "s", "Age of the oldest open PostgreSQL transaction")
       deadTuples <-
@@ -479,7 +479,7 @@ object DbMetricsCollector {
 
       locksBlocked <-
         mkLongGauge("db.pg.locks.blocked", "{locks}", "PostgreSQL lock requests not yet granted")
-      locksTotal <- mkLongGauge("db.pg.locks.total", "{locks}", "Total PostgreSQL lock records")
+      locksTotal     <- mkLongGauge("db.pg.locks.total", "{locks}", "Total PostgreSQL lock records")
       replicationLag <-
         mkLongGauge("db.pg.replication_lag", "s", "Maximum PostgreSQL replication replay lag")
     } yield PgInstruments(
@@ -518,7 +518,7 @@ object DbMetricsCollector {
       activeUsersToday <- mkLongGauge("db.kudi.users.active_today", "{users}", "Users active today")
       totalWallets     <- mkLongGauge("db.kudi.wallets.total", "{wallets}", "Total wallets")
       pendingTxns      <- mkLongGauge("db.kudi.txns.pending", "{transactions}", "Pending transactions")
-      failedTxnsToday <-
+      failedTxnsToday  <-
         mkLongGauge("db.kudi.txns.failed_today", "{transactions}", "Failed transactions today")
       completedTxnsToday <- mkLongGauge(
                               "db.kudi.txns.completed_today",
@@ -554,7 +554,7 @@ object DbMetricsCollector {
 
   private def makeAuthInstruments[F[_]: Temporal](using Meter[F]): Resource[F, AuthInstruments[F]] =
     for {
-      activeSessions <- mkLongGauge("db.kudi.sessions.active", "{sessions}", "Active sessions")
+      activeSessions    <- mkLongGauge("db.kudi.sessions.active", "{sessions}", "Active sessions")
       expiredNotCleaned <- mkLongGauge(
                              "db.kudi.sessions.expired_not_cleaned",
                              "{sessions}",
@@ -582,7 +582,7 @@ object DbMetricsCollector {
                              "{ips}",
                              "Distinct IPs with failed logins in the last hour"
                            )
-      activeApiKeys <- mkLongGauge("db.kudi.api_keys.active", "{keys}", "Active API keys")
+      activeApiKeys  <- mkLongGauge("db.kudi.api_keys.active", "{keys}", "Active API keys")
       pendingKycDocs <-
         mkLongGauge("db.kudi.kyc.pending_docs", "{documents}", "Pending KYC documents")
       mfaEnabledUsers <-
@@ -685,12 +685,12 @@ object DbMetricsCollector {
     for {
       sys <- uniqueOne(session, systemQ, "system metrics query")
 
-      totalBlocks = sys.blksHit.toDouble + sys.blksRead.toDouble
+      totalBlocks   = sys.blksHit.toDouble + sys.blksRead.toDouble
       cacheHitRatio =
         if (totalBlocks > 0.0) sys.blksHit.toDouble / totalBlocks
         else 1.0
 
-      totalTuples = sys.liveTuples.toDouble + sys.deadTuples.toDouble
+      totalTuples    = sys.liveTuples.toDouble + sys.deadTuples.toDouble
       deadTupleRatio =
         if (totalTuples > 0.0) sys.deadTuples.toDouble / totalTuples
         else 0.0
@@ -849,11 +849,15 @@ object DbMetricsCollector {
 
   private def validateConfig[F[_]: MonadThrow](config: Config): F[Unit] =
     if (config.interval <= 0.seconds)
-      new IllegalArgumentException("DbMetricsCollector interval must be positive")
-        .raiseError[F, Unit]
+      new IllegalArgumentException("DbMetricsCollector interval must be positive").raiseError[
+        F,
+        Unit
+      ]
     else if (config.pollTimeout <= 0.seconds)
-      new IllegalArgumentException("DbMetricsCollector pollTimeout must be positive")
-        .raiseError[F, Unit]
+      new IllegalArgumentException("DbMetricsCollector pollTimeout must be positive").raiseError[
+        F,
+        Unit
+      ]
     else ().pure[F]
 
   def make[F[_]: Temporal: Logger](

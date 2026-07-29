@@ -52,10 +52,13 @@ object AuditService {
         )
 
       def getHistory(entityType: String, entityId: String, limit: Int): F[List[AuditLogEntry]] =
-        Instrumented
-          .trace("AuditService.getHistory", m, Attribute("audit.entity_type", entityType))(
-            repo.findByEntity(entityType, entityId, limit)
-          )
+        Instrumented.trace(
+          "AuditService.getHistory",
+          m,
+          Attribute("audit.entity_type", entityType)
+        )(
+          repo.findByEntity(entityType, entityId, limit)
+        )
 
     }
 

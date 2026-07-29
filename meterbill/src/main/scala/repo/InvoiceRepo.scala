@@ -73,8 +73,9 @@ object InvoiceRepo {
       sql"SELECT #$invCols FROM invoices WHERE id = $uuid".query(invoice)
 
     val byTenant: Query[UUID, Invoice] =
-      sql"SELECT #$invCols FROM invoices WHERE tenant_id = $uuid ORDER BY created_at DESC"
-        .query(invoice)
+      sql"SELECT #$invCols FROM invoices WHERE tenant_id = $uuid ORDER BY created_at DESC".query(
+        invoice
+      )
 
     val lineItemsByInvoice: Query[UUID, LineItem] =
       sql"SELECT #$liCols FROM line_items WHERE invoice_id = $uuid ORDER BY id".query(lineItem)

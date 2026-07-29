@@ -69,7 +69,8 @@ private object Queries {
     """.query(User.codec)
 
   val insert: Query[(Email, Age), UserId] =
-    sql"INSERT INTO users (email, age) VALUES (${Email.codec}, ${Age.codec}) RETURNING id"
-      .query(UserId.codec)
+    sql"INSERT INTO users (email, age) VALUES (${Email.codec}, ${Age.codec}) RETURNING id".query(
+      UserId.codec
+    )
 
 }

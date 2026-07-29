@@ -71,10 +71,13 @@ object NotificationRepo {
     } yield new NotificationRepo[F] {
 
       def findTemplateByCode(code: String): F[Option[NotificationTemplate]] =
-        Instrumented
-          .trace("NotificationRepo.findTemplateByCode", m, Attribute("template.code", code))(
-            pFindTemplate.option(code)
-          )
+        Instrumented.trace(
+          "NotificationRepo.findTemplateByCode",
+          m,
+          Attribute("template.code", code)
+        )(
+          pFindTemplate.option(code)
+        )
 
       def getPreferences(userId: Long): F[List[NotificationPreference]] =
         Instrumented.trace("NotificationRepo.getPreferences", m, Attribute("user.id", userId))(

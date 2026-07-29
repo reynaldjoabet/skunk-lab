@@ -33,8 +33,9 @@ object TenantRepo {
       """.query(tenant)
 
     val byId: Query[UUID, Tenant] =
-      sql"SELECT id, slug, name, email, metadata, created_at FROM tenants WHERE id = $uuid"
-        .query(tenant)
+      sql"SELECT id, slug, name, email, metadata, created_at FROM tenants WHERE id = $uuid".query(
+        tenant
+      )
 
     val bySlug: Query[String, Tenant] =
       sql"SELECT id, slug, name, email, metadata, created_at FROM tenants WHERE slug = $varchar"
@@ -47,8 +48,8 @@ object TenantRepo {
       (pInsert, pById, pBySlug) =>
         new TenantRepo[F] {
 
-          def create(slug: String, name: String, email: String) = pInsert
-            .unique((slug, name, email))
+          def create(slug: String, name: String, email: String) =
+            pInsert.unique((slug, name, email))
 
           def findById(id: UUID)       = pById.option(id)
           def findBySlug(slug: String) = pBySlug.option(slug)

@@ -37,7 +37,7 @@ object UserService {
         Instrumented.trace("UserService.register", m)(
           for {
             user <- repo.create(cmd)
-            _ <- audit.log(
+            _    <- audit.log(
                    actorId = Some(user.userId),
                    action = "user_registered",
                    entityType = "user",

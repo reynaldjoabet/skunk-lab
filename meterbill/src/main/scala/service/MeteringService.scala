@@ -32,7 +32,7 @@ object MeteringService {
           subs
             .findActive(tenantId)
             .flatMap {
-              case None => MonadCancelThrow[F].raiseError(NoActiveSubscription(tenantId))
+              case None      => MonadCancelThrow[F].raiseError(NoActiveSubscription(tenantId))
               case Some(sub) =>
                 usage
                   .record(tenantId, sub.id, req.metric, req.quantity, req.idempotencyKey)
@@ -45,7 +45,7 @@ object MeteringService {
           subs
             .findActive(tenantId)
             .flatMap {
-              case None => List.empty[UsageSummary].pure[F]
+              case None      => List.empty[UsageSummary].pure[F]
               case Some(sub) =>
                 usage.summaryForPeriod(sub.id, sub.currentPeriodStart, sub.currentPeriodEnd)
             }

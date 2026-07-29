@@ -4,7 +4,7 @@ object Dependencies {
 
   private object Version {
 
-    val http4s     = "0.23.34"
+    val http4s     = "0.23.36"
     val circe      = "0.14.15"
     val skunk      = "1.1.0-RC1"
     val otel4s     = "0.16.0"

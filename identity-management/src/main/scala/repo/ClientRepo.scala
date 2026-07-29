@@ -94,8 +94,9 @@ object ClientRepo {
 
     // Grant types
     val listGrantTypes: Query[Int, ClientGrantType] =
-      sql"SELECT id, grant_type, client_id FROM client_grant_types WHERE client_id = $int4"
-        .query(clientGrantType)
+      sql"SELECT id, grant_type, client_id FROM client_grant_types WHERE client_id = $int4".query(
+        clientGrantType
+      )
 
     val addGrantType: Query[String *: Int *: EmptyTuple, ClientGrantType] =
       sql"INSERT INTO client_grant_types (grant_type, client_id) VALUES ($text, $int4) RETURNING id, grant_type, client_id"

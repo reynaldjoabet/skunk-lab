@@ -41,8 +41,9 @@ object SubscriptionRepo {
       sql"SELECT #$cols FROM subscriptions WHERE id = $uuid".query(subscription)
 
     val byTenant: Query[UUID, Subscription] =
-      sql"SELECT #$cols FROM subscriptions WHERE tenant_id = $uuid ORDER BY created_at DESC"
-        .query(subscription)
+      sql"SELECT #$cols FROM subscriptions WHERE tenant_id = $uuid ORDER BY created_at DESC".query(
+        subscription
+      )
 
     val active: Query[UUID, Subscription] =
       sql"SELECT #$cols FROM subscriptions WHERE tenant_id = $uuid AND status = 'active' LIMIT 1"

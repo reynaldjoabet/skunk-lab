@@ -44,7 +44,7 @@ object AuthService {
     m: Meter[F]
   ): F[AuthService[F]] =
     for {
-      met <- Instrumented.makeMetrics[F]("service.auth")
+      met        <- Instrumented.makeMetrics[F]("service.auth")
       loginCount <- m.counter[Long]("service.auth.logins")
                       .withUnit("{logins}")
                       .withDescription("Login attempts by outcome")
@@ -67,7 +67,7 @@ object AuthService {
         Instrumented.trace("AuthService.login", met) {
           for {
             result <- creds.verifyPassword(email, password)
-            _ <- attempts.record(
+            _      <- attempts.record(
                    userId = result.userId,
                    success = result.isValid,
                    identifier = email,
@@ -104,8 +104,14 @@ object AuthService {
         Instrumented.trace("AuthService.createSession", met, Attribute("user.id", userId))(
           for {
             sid <-
-              sessions
-                .createSession(userId, tokenHash, ipAddress, userAgent, deviceFingerprint, ttlHours)
+              sessions.createSession(
+                userId,
+                tokenHash,
+                ipAddress,
+                userAgent,
+                deviceFingerprint,
+                ttlHours
+              )
             _ <- audit.log(
                    actorId = Some(userId),
                    action = "session_created",
@@ -138,7 +144,7 @@ object AuthService {
         Instrumented.trace("AuthService.revokeAllSessions", met, Attribute("user.id", userId))(
           for {
             count <- sessions.revokeAllSessions(userId, reasonId)
-            _ <- audit.log(
+            _     <- audit.log(
                    actorId = Some(userId),
                    action = "all_sessions_revoked",
                    entityType = "user",

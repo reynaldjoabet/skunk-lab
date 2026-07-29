@@ -35,8 +35,9 @@ object ServerSideSessionRepo {
       sql"SELECT #$cols FROM idmgmt.server_side_sessions WHERE key = $text".query(serverSideSession)
 
     val findBySubjectId: Query[String, ServerSideSession] =
-      sql"SELECT #$cols FROM idmgmt.server_side_sessions WHERE subject_id = $text"
-        .query(serverSideSession)
+      sql"SELECT #$cols FROM idmgmt.server_side_sessions WHERE subject_id = $text".query(
+        serverSideSession
+      )
 
     val insert: Query[
       String *: String *: String *: Option[String] *: Option[String] *: String *: EmptyTuple,

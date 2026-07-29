@@ -77,9 +77,10 @@ object TransferServiceV2 {
 
                 // Velocity check
                 check <- velocity.checkDailyLimit(src.id, req.amount)
-                _ <-
-                  check
-                    .leftTraverse(msg => MonadCancelThrow[F].raiseError[Unit](new Exception(msg)))
+                _     <-
+                  check.leftTraverse(msg =>
+                    MonadCancelThrow[F].raiseError[Unit](new Exception(msg))
+                  )
 
                 // Execute
                 _  <- accounts.updateBalance(src.id, src.balance - req.amount)

@@ -54,7 +54,7 @@ object KycService {
           for {
             doc <- docs.create(userId, documentType, fileReference, fileHash)
             _   <- users.updateKycStatus(userId, KycStatusId.Pending)
-            _ <- audit.log(
+            _   <- audit.log(
                    actorId = Some(userId),
                    action = "kyc_document_submitted",
                    entityType = "kyc_document",
@@ -75,11 +75,12 @@ object KycService {
         Instrumented.trace("KycService.reviewDocument", m, Attribute("document.id", documentId))(
           for {
             docOpt <- docs.findById(documentId)
-            doc <- docOpt match {
+            doc    <- docOpt match {
                      case Some(d) => d.pure[F]
-                     case None =>
-                       MonadCancelThrow[F]
-                         .raiseError(new Exception(s"KYC document $documentId not found"))
+                     case None    =>
+                       MonadCancelThrow[F].raiseError(
+                         new Exception(s"KYC document $documentId not found")
+                       )
                    }
             _ <- docs.review(documentId, reviewerId, approved, rejectionReason)
             _ <- if (approved) users.updateKycStatus(doc.userId, KycStatusId.Verified)

@@ -116,7 +116,9 @@ object Example {
     sessions.use { s =>
       s.channel(id"jobs_changed")
         .listen(maxQueued = 1024) // Stream[IO, Notification[String]]
-        .evalMap(n => processJob(n.value)).compile.drain
+        .evalMap(n => processJob(n.value))
+        .compile
+        .drain
     }
 
 }

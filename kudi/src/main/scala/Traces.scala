@@ -39,7 +39,7 @@ final case class Traces(tracer: Tracer[IO]) extends EndpointInterceptor[IO] {
               for {
                 _        <- span.addEvent("Send request")
                 response <- handle(span, endpointHandler.onDecodeFailure(ctx))
-                _ <- response.traverse_(r =>
+                _        <- response.traverse_(r =>
                        span.addAttributes(Observability.Attributes.fromTapirResponse(r))
                      )
                 _ <- span.addEvent("Request received")

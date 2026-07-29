@@ -138,10 +138,13 @@ object TransactionRepo {
         )
 
       def findByReference(referenceId: String): F[Option[Transaction]] =
-        Instrumented
-          .trace("TransactionRepo.findByReference", m, Attribute("txn.reference", referenceId))(
-            pFindByRef.option(referenceId)
-          )
+        Instrumented.trace(
+          "TransactionRepo.findByReference",
+          m,
+          Attribute("txn.reference", referenceId)
+        )(
+          pFindByRef.option(referenceId)
+        )
 
       def findByWallet(walletId: Long, limit: Int): F[List[kudi.domain.Transaction]] =
         Instrumented.trace("TransactionRepo.findByWallet", m, Attribute("wallet.id", walletId))(

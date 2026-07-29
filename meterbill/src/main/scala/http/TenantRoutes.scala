@@ -25,7 +25,7 @@ object TenantRoutes {
 
       case req @ POST -> Root / "tenants" =>
         ErrorHandler.handle(for {
-          body <- req.as[CreateTenantReq]
+          body   <- req.as[CreateTenantReq]
           tenant <-
             pool.use(s => TenantRepo.make(s).flatMap(_.create(body.slug, body.name, body.email)))
           resp <- Created(tenant)

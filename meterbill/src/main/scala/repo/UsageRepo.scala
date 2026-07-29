@@ -88,8 +88,9 @@ object UsageRepo {
             )
             .flatMap(
               _.execute(
-                events
-                  .map(e => (e.tenantId, e.subscriptionId, e.metric, e.quantity, e.idempotencyKey))
+                events.map(e =>
+                  (e.tenantId, e.subscriptionId, e.metric, e.quantity, e.idempotencyKey)
+                )
               )
             )
             .void

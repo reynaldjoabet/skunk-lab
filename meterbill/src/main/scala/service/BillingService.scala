@@ -77,8 +77,8 @@ object BillingService {
                 for {
                   sub <-
                     subs.findById(subscriptionId).flatMap(_.liftTo[F](SubNotFound(subscriptionId)))
-                  plan <- plans.findById(sub.planId).flatMap(_.liftTo[F](PlanNotFound(sub.planId)))
-                  prev <- calculate(sub, plan)
+                  plan    <- plans.findById(sub.planId).flatMap(_.liftTo[F](PlanNotFound(sub.planId)))
+                  prev    <- calculate(sub, plan)
                   invoice <- invoices
                                .create(
                                  sub.tenantId,

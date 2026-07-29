@@ -21,8 +21,9 @@ object BillingRoutes {
     HttpRoutes.of[F] {
 
       case GET -> Root / "subscriptions" / UUIDVar(subId) / "preview" =>
-        ErrorHandler
-          .handle(pool.use(s => BillingService.make(s).flatMap(_.preview(subId))).flatMap(Ok(_)))
+        ErrorHandler.handle(
+          pool.use(s => BillingService.make(s).flatMap(_.preview(subId))).flatMap(Ok(_))
+        )
 
       case POST -> Root / "subscriptions" / UUIDVar(subId) / "invoice" =>
         ErrorHandler.handle(for {
@@ -31,8 +32,9 @@ object BillingRoutes {
         } yield resp)
 
       case GET -> Root / "tenants" / UUIDVar(id) / "invoices" =>
-        ErrorHandler
-          .handle(pool.use(s => BillingService.make(s).flatMap(_.listInvoices(id))).flatMap(Ok(_)))
+        ErrorHandler.handle(
+          pool.use(s => BillingService.make(s).flatMap(_.listInvoices(id))).flatMap(Ok(_))
+        )
 
       case GET -> Root / "invoices" / UUIDVar(id) =>
         ErrorHandler.handle(
@@ -46,8 +48,9 @@ object BillingRoutes {
 
       case POST -> Root / "invoices" / UUIDVar(id) / "pay" =>
         ErrorHandler.handle(
-          pool
-            .use(s => BillingService.make(s).flatMap(_.markPaid(id))) *> Ok(Map("status" -> "paid"))
+          pool.use(s => BillingService.make(s).flatMap(_.markPaid(id))) *> Ok(
+            Map("status" -> "paid")
+          )
         )
     }
   }

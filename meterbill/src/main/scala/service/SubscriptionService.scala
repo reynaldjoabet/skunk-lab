@@ -27,26 +27,24 @@ object SubscriptionService {
       extends Exception(s"Tenant $tid already has an active subscription")
 
   def make[F[_]: Concurrent](s: Session[F]): F[SubscriptionService[F]] =
-    (TenantRepo.make(s), PlanRepo.make(s), SubscriptionRepo.make(s)).mapN {
-      (tenants, plans, subs) =>
-        new SubscriptionService[F] {
+    (TenantRepo.make(s), PlanRepo.make(s), SubscriptionRepo.make(s)).mapN { (tenants, plans, subs) =>
+      new SubscriptionService[F] {
 
-          def subscribe(tenantId: UUID, planId: UUID): F[Subscription] =
-            for {
-              _        <- tenants.findById(tenantId).flatMap(_.liftTo[F](TenantNotFound(tenantId)))
-              _        <- plans.findById(planId).flatMap(_.liftTo[F](PlanNotFound(planId)))
-              existing <- subs.findActive(tenantId)
-              _ <- MonadCancelThrow[F]
-                     .raiseError(AlreadySubscribed(tenantId))
-                     .whenA(existing.isDefined)
-              sub <- subs.create(tenantId, planId)
-            } yield sub
+        def subscribe(tenantId: UUID, planId: UUID): F[Subscription] =
+          for {
+            _        <- tenants.findById(tenantId).flatMap(_.liftTo[F](TenantNotFound(tenantId)))
+            _        <- plans.findById(planId).flatMap(_.liftTo[F](PlanNotFound(planId)))
+            existing <- subs.findActive(tenantId)
+            _        <-
+              MonadCancelThrow[F].raiseError(AlreadySubscribed(tenantId)).whenA(existing.isDefined)
+            sub <- subs.create(tenantId, planId)
+          } yield sub
 
-          def cancel(subscriptionId: UUID) = subs.cancel(subscriptionId)
-          def getActive(tenantId: UUID)    = subs.findActive(tenantId)
-          def listPlans                    = plans.listActive
+        def cancel(subscriptionId: UUID) = subs.cancel(subscriptionId)
+        def getActive(tenantId: UUID)    = subs.findActive(tenantId)
+        def listPlans                    = plans.listActive
 
-        }
+      }
     }
 
 }

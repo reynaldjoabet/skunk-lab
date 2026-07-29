@@ -28,12 +28,14 @@ object UsageRoutes {
         } yield resp)
 
       case GET -> Root / "tenants" / UUIDVar(id) / "usage" / "summary" =>
-        ErrorHandler
-          .handle(pool.use(s => MeteringService.make(s).flatMap(_.summary(id))).flatMap(Ok(_)))
+        ErrorHandler.handle(
+          pool.use(s => MeteringService.make(s).flatMap(_.summary(id))).flatMap(Ok(_))
+        )
 
       case GET -> Root / "tenants" / UUIDVar(id) / "usage" / "recent" =>
-        ErrorHandler
-          .handle(pool.use(s => MeteringService.make(s).flatMap(_.recent(id, 50))).flatMap(Ok(_)))
+        ErrorHandler.handle(
+          pool.use(s => MeteringService.make(s).flatMap(_.recent(id, 50))).flatMap(Ok(_))
+        )
     }
   }
 
