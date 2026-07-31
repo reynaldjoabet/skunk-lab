@@ -5,7 +5,7 @@ trait EntityGateway[F[_], TodoId] {
   def readManyById(ids: Vector[TodoId]): F[Vector[Todo.Existing[TodoId]]]
 
   def readManyByPartialDescription(
-    partialDescription: String
+      partialDescription: String
   ): F[Vector[Todo.Existing[TodoId]]]
 
   def readAll: F[Vector[Todo.Existing[TodoId]]]

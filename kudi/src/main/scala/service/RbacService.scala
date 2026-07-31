@@ -14,10 +14,10 @@ import skunk.Session
 trait RbacService[F[_]] {
 
   def assignRole(
-    userId: Long,
-    roleId: RoleId,
-    grantedBy: Option[Long],
-    expiresAt: Option[java.time.OffsetDateTime]
+      userId: Long,
+      roleId: RoleId,
+      grantedBy: Option[Long],
+      expiresAt: Option[java.time.OffsetDateTime]
   ): F[Unit]
 
   def revokeRole(userId: Long, roleId: RoleId): F[Unit]
@@ -31,7 +31,7 @@ trait RbacService[F[_]] {
 object RbacService {
 
   def fromSession[F[_]: Temporal: Tracer](s: Session[F])(using
-    Meter[F]
+      Meter[F]
   ): F[RbacService[F]] =
     for {
       m     <- Instrumented.makeMetrics[F]("service.rbac")
@@ -40,10 +40,10 @@ object RbacService {
     } yield new RbacService[F] {
 
       def assignRole(
-        userId: Long,
-        roleId: RoleId,
-        grantedBy: Option[Long],
-        expiresAt: Option[java.time.OffsetDateTime]
+          userId: Long,
+          roleId: RoleId,
+          grantedBy: Option[Long],
+          expiresAt: Option[java.time.OffsetDateTime]
       ): F[Unit] =
         Instrumented.trace(
           "RbacService.assignRole",

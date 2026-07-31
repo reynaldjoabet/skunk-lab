@@ -20,10 +20,10 @@ trait NotificationRepo[F[_]] {
   def getPreferences(userId: Long): F[List[NotificationPreference]]
 
   def upsertPreference(
-    userId: Long,
-    channelId: NotificationChannelId,
-    eventType: String,
-    isEnabled: Boolean
+      userId: Long,
+      channelId: NotificationChannelId,
+      eventType: String,
+      isEnabled: Boolean
   ): F[Unit]
 
 }
@@ -61,7 +61,7 @@ object NotificationRepo {
   }
 
   def fromSession[F[_]: Temporal: Tracer](s: Session[F])(using
-    Meter[F]
+      Meter[F]
   ): F[NotificationRepo[F]] =
     for {
       m             <- Instrumented.makeMetrics[F]("repo.notification")
@@ -85,10 +85,10 @@ object NotificationRepo {
         )
 
       def upsertPreference(
-        userId: Long,
-        channelId: NotificationChannelId,
-        eventType: String,
-        isEnabled: Boolean
+          userId: Long,
+          channelId: NotificationChannelId,
+          eventType: String,
+          isEnabled: Boolean
       ): F[Unit] =
         Instrumented.trace("NotificationRepo.upsertPreference", m, Attribute("user.id", userId))(
           pUpsertPref.execute((userId, channelId.value, eventType, isEnabled, isEnabled)).void

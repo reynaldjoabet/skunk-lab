@@ -14,19 +14,19 @@ import sttp.tapir.Endpoint
 final case class Traces(tracer: Tracer[IO]) extends EndpointInterceptor[IO] {
 
   override def apply[B](
-    responder: Responder[IO, B],
-    endpointHandler: EndpointHandler[IO, B]
+      responder: Responder[IO, B],
+      endpointHandler: EndpointHandler[IO, B]
   ): EndpointHandler[IO, B] =
     new EndpointHandler[IO, B] {
 
       override def onDecodeSuccess[A, U, I](
-        ctx: DecodeSuccessContext[IO, A, U, I]
+          ctx: DecodeSuccessContext[IO, A, U, I]
       )(using monad: MonadError[IO], bodyListener: BodyListener[IO, B]): IO[ServerResponse[B]] =
         trace(ctx.endpoint, ctx.request, endpointHandler.onDecodeSuccess(ctx))
 
       override def onDecodeFailure(ctx: DecodeFailureContext)(using
-        monad: MonadError[IO],
-        bodyListener: BodyListener[IO, B]
+          monad: MonadError[IO],
+          bodyListener: BodyListener[IO, B]
       ): IO[Option[ServerResponse[B]]] =
         tracer.joinOrRoot(ctx.request.headers.map(h => h.name -> h.value).toMap) {
           tracer
@@ -48,15 +48,15 @@ final case class Traces(tracer: Tracer[IO]) extends EndpointInterceptor[IO] {
         }
 
       override def onSecurityFailure[A](ctx: SecurityFailureContext[IO, A])(using
-        monad: MonadError[IO],
-        bodyListener: BodyListener[IO, B]
+          monad: MonadError[IO],
+          bodyListener: BodyListener[IO, B]
       ): IO[ServerResponse[B]] =
         trace(ctx.endpoint, ctx.request, endpointHandler.onSecurityFailure(ctx))
 
       private def trace[O, I, U, A](
-        endpoint: Endpoint[A, I, ?, ?, ?],
-        request: ServerRequest,
-        execution: IO[ServerResponse[O]]
+          endpoint: Endpoint[A, I, ?, ?, ?],
+          request: ServerRequest,
+          execution: IO[ServerResponse[O]]
       ): IO[ServerResponse[O]] =
         tracer.joinOrRoot(request.headers.map(h => h.name -> h.value).toMap) {
           tracer

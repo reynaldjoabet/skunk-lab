@@ -75,29 +75,29 @@ enum TransferStatus {
 // --- Aggregates -----------------------------------------------------------
 
 final case class Customer(
-  id: CustomerId,
-  fullName: FullName,
-  email: Email,
-  phone: PhoneE164,
-  country: CountryCode,
-  kycTier: KycTier
+    id: CustomerId,
+    fullName: FullName,
+    email: Email,
+    phone: PhoneE164,
+    country: CountryCode,
+    kycTier: KycTier
 )
 
 final case class Account(
-  id: AccountId,
-  owner: CustomerId,
-  iban: Iban,
-  balance: Money,
-  status: AccountStatus
+    id: AccountId,
+    owner: CustomerId,
+    iban: Iban,
+    balance: Money,
+    status: AccountStatus
 )
 
 final case class Transfer(
-  id: TransferId,
-  from: AccountId,
-  to: AccountId,
-  amount: TransferAmount,
-  reference: Description,
-  status: TransferStatus
+    id: TransferId,
+    from: AccountId,
+    to: AccountId,
+    amount: TransferAmount,
+    reference: Description,
+    status: TransferStatus
 )
 
 // Refined, NOT a newtype — structurally equal to its definition everywhere

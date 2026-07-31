@@ -111,8 +111,7 @@ lazy val `identity-management` = (project in file("identity-management"))
   .settings(deploySettings *)
 
 // rootProject = (project in file(".")), autoAggregate = discovers all subprojects automatically
-lazy val root = rootProject
-  .autoAggregate
+lazy val root = rootProject.autoAggregate
   .settings(
     libraryDependencies ++= common ++ Seq(
       pureconfig,

@@ -19,8 +19,8 @@ import org.typelevel.otel4s.Attribute
 object Instrumented {
 
   case class Metrics[F[_]](
-    latency: Histogram[F, Double],
-    errors: Counter[F, Long]
+      latency: Histogram[F, Double],
+      errors: Counter[F, Long]
   )
 
   def makeMetrics[F[_]: Monad](prefix: String)(using m: Meter[F]): F[Metrics[F]] =
@@ -36,9 +36,9 @@ object Instrumented {
     } yield Metrics(lat, err)
 
   def trace[F[_]: Temporal: Tracer, A](
-    spanName: String,
-    metrics: Metrics[F],
-    attrs: Attribute[?]*
+      spanName: String,
+      metrics: Metrics[F],
+      attrs: Attribute[?]*
   )(fa: F[A]): F[A] =
     Tracer[F]
       .span(spanName, attrs*)
@@ -52,8 +52,7 @@ object Instrumented {
                         opAttr  = Attribute("operation", spanName)
                         _      <- metrics.latency.record(elapsed, opAttr)
                         _      <- metrics.errors.add(1L, opAttr)
-                        _      <- Tracer[F]
-                               .currentSpanOrNoop
+                        _      <- Tracer[F].currentSpanOrNoop
                                .flatMap { span =>
                                  span.addAttribute(Attribute("error", true)) *>
                                    span.setStatus(StatusCode.Error, err.getMessage)

@@ -15,11 +15,11 @@ import skunk.implicits._
 trait UsageRepo[F[_]] {
 
   def record(
-    tenantId: UUID,
-    subId: UUID,
-    metric: String,
-    quantity: Long,
-    key: String
+      tenantId: UUID,
+      subId: UUID,
+      metric: String,
+      quantity: Long,
+      key: String
   ): F[UsageEvent]
 
   def recordBatch(events: List[UsageEvent]): F[Unit]
@@ -44,7 +44,7 @@ object UsageRepo {
       """.query(usageEvent)
 
     val totalForPeriod
-      : Query[UUID *: String *: OffsetDateTime *: OffsetDateTime *: EmptyTuple, Long] =
+        : Query[UUID *: String *: OffsetDateTime *: OffsetDateTime *: EmptyTuple, Long] =
       sql"""
         SELECT COALESCE(SUM(quantity), 0)
         FROM usage_events
@@ -53,7 +53,7 @@ object UsageRepo {
       """.query(int8)
 
     val summaryForPeriod
-      : Query[UUID *: OffsetDateTime *: OffsetDateTime *: EmptyTuple, UsageSummary] =
+        : Query[UUID *: OffsetDateTime *: OffsetDateTime *: EmptyTuple, UsageSummary] =
       sql"""
         SELECT metric, COALESCE(SUM(quantity), 0)
         FROM usage_events
@@ -83,17 +83,13 @@ object UsageRepo {
         def recordBatch(events: List[UsageEvent]): F[Unit] = {
           val enc = (uuid *: uuid *: varchar *: int8 *: varchar).values.list(events.length)
           s.prepare(
-              sql"INSERT INTO usage_events (tenant_id, subscription_id, metric, quantity, idempotency_key) VALUES $enc"
-                .command
+            sql"INSERT INTO usage_events (tenant_id, subscription_id, metric, quantity, idempotency_key) VALUES $enc".command
+          ).flatMap(
+            _.execute(
+              events
+                .map(e => (e.tenantId, e.subscriptionId, e.metric, e.quantity, e.idempotencyKey))
             )
-            .flatMap(
-              _.execute(
-                events.map(e =>
-                  (e.tenantId, e.subscriptionId, e.metric, e.quantity, e.idempotencyKey)
-                )
-              )
-            )
-            .void
+          ).void
         }
 
         def totalForPeriod(subId: UUID, metric: String, from: OffsetDateTime, to: OffsetDateTime) =

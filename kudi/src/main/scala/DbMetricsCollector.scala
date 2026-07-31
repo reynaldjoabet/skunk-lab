@@ -18,14 +18,14 @@ import skunk.implicits.*
 object DbMetricsCollector {
 
   final case class Config(
-    interval: FiniteDuration = 15.seconds,
-    pollTimeout: FiniteDuration = 10.seconds,
-    collectBusinessMetrics: Boolean = true,
-    collectAuthMetrics: Boolean = true
+      interval: FiniteDuration = 15.seconds,
+      pollTimeout: FiniteDuration = 10.seconds,
+      collectBusinessMetrics: Boolean = true,
+      collectAuthMetrics: Boolean = true
   )
 
-  final private case class LongGauge[F[_]](
-    ref: Ref[F, Long]
+  private final case class LongGauge[F[_]](
+      ref: Ref[F, Long]
   ) {
 
     def set(value: Long): F[Unit] =
@@ -33,8 +33,8 @@ object DbMetricsCollector {
 
   }
 
-  final private case class DoubleGauge[F[_]](
-    ref: Ref[F, Double]
+  private final case class DoubleGauge[F[_]](
+      ref: Ref[F, Double]
   ) {
 
     def set(value: Double): F[Unit] =
@@ -42,29 +42,27 @@ object DbMetricsCollector {
 
   }
 
-  final private class DeltaCounter[F[_]: Monad](
-    counter: Counter[F, Long],
-    previous: Ref[F, Option[Long]]
+  private final class DeltaCounter[F[_]: Monad](
+      counter: Counter[F, Long],
+      previous: Ref[F, Option[Long]]
   ) {
 
     def observe(cumulative: Long): F[Unit] =
-      previous
-        .modify {
-          case None =>
-            Some(cumulative) -> Monad[F].unit
+      previous.modify {
+        case None =>
+          Some(cumulative) -> Monad[F].unit
 
-          case Some(prev) if cumulative >= prev =>
-            val delta = cumulative - prev
+        case Some(prev) if cumulative >= prev =>
+          val delta = cumulative - prev
 
-            Some(cumulative) ->
-              (if (delta > 0L) counter.add(delta) else Monad[F].unit)
+          Some(cumulative) ->
+            (if (delta > 0L) counter.add(delta) else Monad[F].unit)
 
-          case Some(_) =>
-            // PostgreSQL stats may reset after pg_stat_reset(), restart, failover, or restore.
-            // Do not emit a negative delta; just re-seed the baseline.
-            Some(cumulative) -> Monad[F].unit
-        }
-        .flatten
+        case Some(_) =>
+          // PostgreSQL stats may reset after pg_stat_reset(), restart, failover, or restore.
+          // Do not emit a negative delta; just re-seed the baseline.
+          Some(cumulative) -> Monad[F].unit
+      }.flatten
 
   }
 
@@ -75,9 +73,9 @@ object DbMetricsCollector {
     Temporal[F].realTime.map(_.toSeconds)
 
   private def mkLongGauge[F[_]: Temporal](
-    name: String,
-    unit: String,
-    description: String
+      name: String,
+      unit: String,
+      description: String
   )(using meter: Meter[F]): Resource[F, LongGauge[F]] =
     for {
       ref <- Resource.eval(Ref.of[F, Long](0L))
@@ -91,9 +89,9 @@ object DbMetricsCollector {
     } yield LongGauge(ref)
 
   private def mkDoubleGauge[F[_]: Temporal](
-    name: String,
-    unit: String,
-    description: String
+      name: String,
+      unit: String,
+      description: String
   )(using meter: Meter[F]): Resource[F, DoubleGauge[F]] =
     for {
       ref <- Resource.eval(Ref.of[F, Double](0.0))
@@ -107,84 +105,84 @@ object DbMetricsCollector {
     } yield DoubleGauge(ref)
 
   private def mkCounter[F[_]: Temporal](
-    name: String,
-    unit: String,
-    description: String
+      name: String,
+      unit: String,
+      description: String
   )(using meter: Meter[F]): Resource[F, Counter[F, Long]] =
     Resource.eval {
       meter.counter[Long](name).withUnit(unit).withDescription(description).create
     }
 
   private def mkHistogram[F[_]: Temporal](
-    name: String,
-    unit: String,
-    description: String
+      name: String,
+      unit: String,
+      description: String
   )(using meter: Meter[F]): Resource[F, Histogram[F, Double]] =
     Resource.eval {
       meter.histogram[Double](name).withUnit(unit).withDescription(description).create
     }
 
   private def mkDeltaCounter[F[_]: Temporal](
-    name: String,
-    unit: String,
-    description: String
+      name: String,
+      unit: String,
+      description: String
   )(using meter: Meter[F]): Resource[F, DeltaCounter[F]] =
     for {
       counter  <- mkCounter[F](name, unit, description)
       previous <- Resource.eval(Ref.of[F, Option[Long]](None))
     } yield new DeltaCounter[F](counter, previous)
 
-  final private case class SystemStats(
-    connActive: Long,
-    connIdle: Long,
-    connIdleInTxn: Long,
-    connWaiting: Long,
-    connTotal: Long,
-    xactCommit: Long,
-    xactRollback: Long,
-    blksRead: Long,
-    blksHit: Long,
-    deadlocks: Long,
-    tempBytes: Long,
-    tupReturned: Long,
-    tupFetched: Long,
-    tupInserted: Long,
-    tupUpdated: Long,
-    tupDeleted: Long,
-    dbSize: Long,
-    oldestTxnAge: Long,
-    deadTuples: Long,
-    liveTuples: Long,
-    seqScans: Long,
-    idxScans: Long,
-    locksBlocked: Long,
-    locksTotal: Long,
-    replicationLag: Long
+  private final case class SystemStats(
+      connActive: Long,
+      connIdle: Long,
+      connIdleInTxn: Long,
+      connWaiting: Long,
+      connTotal: Long,
+      xactCommit: Long,
+      xactRollback: Long,
+      blksRead: Long,
+      blksHit: Long,
+      deadlocks: Long,
+      tempBytes: Long,
+      tupReturned: Long,
+      tupFetched: Long,
+      tupInserted: Long,
+      tupUpdated: Long,
+      tupDeleted: Long,
+      dbSize: Long,
+      oldestTxnAge: Long,
+      deadTuples: Long,
+      liveTuples: Long,
+      seqScans: Long,
+      idxScans: Long,
+      locksBlocked: Long,
+      locksTotal: Long,
+      replicationLag: Long
   )
 
-  final private case class BusinessStats(
-    users: Long,
-    activeUsersToday: Long,
-    wallets: Long,
-    pendingTxns: Long,
-    failedTxnsToday: Long,
-    completedTxnsToday: Long,
-    volumeToday: Long,
-    avgTxnSize: Long,
-    ledgerBalanced: Long
+  private final case class BusinessStats(
+      users: Long,
+      activeUsersToday: Long,
+      wallets: Long,
+      pendingTxns: Long,
+      failedTxnsToday: Long,
+      completedTxnsToday: Long,
+      volumeToday: Long,
+      avgTxnSize: Long,
+      ledgerBalanced: Long
   )
 
-  final private case class AuthStats(
-    activeSessions: Long,
-    expiredNotCleaned: Long,
-    uniqueActiveUsers: Long,
-    loginAttemptsLastHour: Long,
-    failedLoginsLastHour: Long,
-    failureRate: Double,
-    distinctFailedIps: Long,
-    activeApiKeys: Long,
-    pendingKycDocs: Long,
-    mfaEnabledUsers: Long
+  private final case class AuthStats(
+      activeSessions: Long,
+      expiredNotCleaned: Long,
+      uniqueActiveUsers: Long,
+      loginAttemptsLastHour: Long,
+      failedLoginsLastHour: Long,
+      failureRate: Double,
+      distinctFailedIps: Long,
+      activeApiKeys: Long,
+      pendingKycDocs: Long,
+      mfaEnabledUsers: Long
   )
 
   private val systemQ: Query[Void, SystemStats] =
@@ -348,77 +346,77 @@ object DbMetricsCollector {
       .query(int8 *: int8 *: int8 *: int8 *: int8 *: float8 *: int8 *: int8 *: int8 *: int8)
       .to[AuthStats]
 
-  final private case class PgInstruments[F[_]](
-    connActive: LongGauge[F],
-    connIdle: LongGauge[F],
-    connIdleInTxn: LongGauge[F],
-    connWaiting: LongGauge[F],
-    connTotal: LongGauge[F],
-    cacheHitRatio: DoubleGauge[F],
-    xactCommit: DeltaCounter[F],
-    xactRollback: DeltaCounter[F],
-    deadlocks: DeltaCounter[F],
-    tempBytes: DeltaCounter[F],
-    tupReturned: DeltaCounter[F],
-    tupFetched: DeltaCounter[F],
-    tupInserted: DeltaCounter[F],
-    tupUpdated: DeltaCounter[F],
-    tupDeleted: DeltaCounter[F],
-    dbSize: LongGauge[F],
-    oldestTxnAge: LongGauge[F],
-    deadTuples: LongGauge[F],
-    liveTuples: LongGauge[F],
-    deadTupleRatio: DoubleGauge[F],
-    seqScans: DeltaCounter[F],
-    idxScans: DeltaCounter[F],
-    locksBlocked: LongGauge[F],
-    locksTotal: LongGauge[F],
-    replicationLag: LongGauge[F]
+  private final case class PgInstruments[F[_]](
+      connActive: LongGauge[F],
+      connIdle: LongGauge[F],
+      connIdleInTxn: LongGauge[F],
+      connWaiting: LongGauge[F],
+      connTotal: LongGauge[F],
+      cacheHitRatio: DoubleGauge[F],
+      xactCommit: DeltaCounter[F],
+      xactRollback: DeltaCounter[F],
+      deadlocks: DeltaCounter[F],
+      tempBytes: DeltaCounter[F],
+      tupReturned: DeltaCounter[F],
+      tupFetched: DeltaCounter[F],
+      tupInserted: DeltaCounter[F],
+      tupUpdated: DeltaCounter[F],
+      tupDeleted: DeltaCounter[F],
+      dbSize: LongGauge[F],
+      oldestTxnAge: LongGauge[F],
+      deadTuples: LongGauge[F],
+      liveTuples: LongGauge[F],
+      deadTupleRatio: DoubleGauge[F],
+      seqScans: DeltaCounter[F],
+      idxScans: DeltaCounter[F],
+      locksBlocked: LongGauge[F],
+      locksTotal: LongGauge[F],
+      replicationLag: LongGauge[F]
   )
 
-  final private case class BusinessInstruments[F[_]](
-    totalUsers: LongGauge[F],
-    activeUsersToday: LongGauge[F],
-    totalWallets: LongGauge[F],
-    pendingTxns: LongGauge[F],
-    failedTxnsToday: LongGauge[F],
-    completedTxnsToday: LongGauge[F],
-    volumeToday: LongGauge[F],
-    avgTxnSize: LongGauge[F],
-    ledgerBalanced: LongGauge[F]
+  private final case class BusinessInstruments[F[_]](
+      totalUsers: LongGauge[F],
+      activeUsersToday: LongGauge[F],
+      totalWallets: LongGauge[F],
+      pendingTxns: LongGauge[F],
+      failedTxnsToday: LongGauge[F],
+      completedTxnsToday: LongGauge[F],
+      volumeToday: LongGauge[F],
+      avgTxnSize: LongGauge[F],
+      ledgerBalanced: LongGauge[F]
   )
 
-  final private case class AuthInstruments[F[_]](
-    activeSessions: LongGauge[F],
-    expiredNotCleaned: LongGauge[F],
-    uniqueActiveUsers: LongGauge[F],
-    loginAttemptsLastHour: LongGauge[F],
-    failedLoginsLastHour: LongGauge[F],
-    failureRate: DoubleGauge[F],
-    distinctFailedIps: LongGauge[F],
-    activeApiKeys: LongGauge[F],
-    pendingKycDocs: LongGauge[F],
-    mfaEnabledUsers: LongGauge[F]
+  private final case class AuthInstruments[F[_]](
+      activeSessions: LongGauge[F],
+      expiredNotCleaned: LongGauge[F],
+      uniqueActiveUsers: LongGauge[F],
+      loginAttemptsLastHour: LongGauge[F],
+      failedLoginsLastHour: LongGauge[F],
+      failureRate: DoubleGauge[F],
+      distinctFailedIps: LongGauge[F],
+      activeApiKeys: LongGauge[F],
+      pendingKycDocs: LongGauge[F],
+      mfaEnabledUsers: LongGauge[F]
   )
 
-  final private case class CollectorInstruments[F[_]](
-    up: LongGauge[F],
-    lastSuccessEpoch: LongGauge[F],
-    lastFailureEpoch: LongGauge[F],
-    pollDuration: Histogram[F, Double],
-    totalFailures: Counter[F, Long],
-    systemFailures: Counter[F, Long],
-    businessFailures: Counter[F, Long],
-    authFailures: Counter[F, Long],
-    sessionFailures: Counter[F, Long],
-    pollTimeouts: Counter[F, Long]
+  private final case class CollectorInstruments[F[_]](
+      up: LongGauge[F],
+      lastSuccessEpoch: LongGauge[F],
+      lastFailureEpoch: LongGauge[F],
+      pollDuration: Histogram[F, Double],
+      totalFailures: Counter[F, Long],
+      systemFailures: Counter[F, Long],
+      businessFailures: Counter[F, Long],
+      authFailures: Counter[F, Long],
+      sessionFailures: Counter[F, Long],
+      pollTimeouts: Counter[F, Long]
   )
 
-  final private case class Instruments[F[_]](
-    pg: PgInstruments[F],
-    business: BusinessInstruments[F],
-    auth: AuthInstruments[F],
-    collector: CollectorInstruments[F]
+  private final case class Instruments[F[_]](
+      pg: PgInstruments[F],
+      business: BusinessInstruments[F],
+      auth: AuthInstruments[F],
+      collector: CollectorInstruments[F]
   )
 
   private def makePgInstruments[F[_]: Temporal](using Meter[F]): Resource[F, PgInstruments[F]] =
@@ -511,7 +509,7 @@ object DbMetricsCollector {
     )
 
   private def makeBusinessInstruments[F[_]: Temporal](using
-    Meter[F]
+      Meter[F]
   ): Resource[F, BusinessInstruments[F]] =
     for {
       totalUsers       <- mkLongGauge("db.kudi.users.total", "{users}", "Total registered users")
@@ -601,7 +599,7 @@ object DbMetricsCollector {
     )
 
   private def makeCollectorInstruments[F[_]: Temporal](using
-    Meter[F]
+      Meter[F]
   ): Resource[F, CollectorInstruments[F]] =
     for {
       up <- mkLongGauge(
@@ -661,9 +659,9 @@ object DbMetricsCollector {
     } yield Instruments(pg, business, auth, collector)
 
   private def uniqueOne[F[_]: MonadThrow, A](
-    session: Session[F],
-    query: Query[Void, A],
-    queryName: String
+      session: Session[F],
+      query: Query[Void, A],
+      queryName: String
   ): F[A] =
     session
       .execute(query)
@@ -679,8 +677,8 @@ object DbMetricsCollector {
       }
 
   private def pollSystem[F[_]: MonadThrow](
-    session: Session[F],
-    inst: PgInstruments[F]
+      session: Session[F],
+      inst: PgInstruments[F]
   ): F[Unit] =
     for {
       sys <- uniqueOne(session, systemQ, "system metrics query")
@@ -729,8 +727,8 @@ object DbMetricsCollector {
     } yield ()
 
   private def pollBusiness[F[_]: MonadThrow](
-    session: Session[F],
-    inst: BusinessInstruments[F]
+      session: Session[F],
+      inst: BusinessInstruments[F]
   ): F[Unit] =
     for {
       biz <- uniqueOne(session, businessQ, "business metrics query")
@@ -747,8 +745,8 @@ object DbMetricsCollector {
     } yield ()
 
   private def pollAuth[F[_]: MonadThrow](
-    session: Session[F],
-    inst: AuthInstruments[F]
+      session: Session[F],
+      inst: AuthInstruments[F]
   ): F[Unit] =
     for {
       auth <- uniqueOne(session, authQ, "auth metrics query")
@@ -766,8 +764,8 @@ object DbMetricsCollector {
     } yield ()
 
   private def runSection[F[_]: Temporal: Logger](
-    name: String,
-    failures: Counter[F, Long]
+      name: String,
+      failures: Counter[F, Long]
   )(effect: F[Unit]): F[Boolean] =
     effect
       .as(true)
@@ -777,9 +775,9 @@ object DbMetricsCollector {
       }
 
   private def collectWithSession[F[_]: Temporal: Logger](
-    session: Session[F],
-    inst: Instruments[F],
-    config: Config
+      session: Session[F],
+      inst: Instruments[F],
+      config: Config
   ): F[Unit] = {
     val sections: F[Boolean] =
       for {
@@ -830,9 +828,9 @@ object DbMetricsCollector {
   }
 
   private def collectOnce[F[_]: Temporal: Logger](
-    pool: Resource[F, Session[F]],
-    inst: Instruments[F],
-    config: Config
+      pool: Resource[F, Session[F]],
+      inst: Instruments[F],
+      config: Config
   ): F[Unit] =
     pool
       .use(session => collectWithSession(session, inst, config))
@@ -861,14 +859,14 @@ object DbMetricsCollector {
     else ().pure[F]
 
   def make[F[_]: Temporal: Logger](
-    pool: Resource[F, Session[F]],
-    interval: FiniteDuration = 15.seconds
+      pool: Resource[F, Session[F]],
+      interval: FiniteDuration = 15.seconds
   )(using Meter[F]): Resource[F, Unit] =
     make(pool, Config(interval = interval))
 
   def make[F[_]: Temporal: Logger](
-    pool: Resource[F, Session[F]],
-    config: Config
+      pool: Resource[F, Session[F]],
+      config: Config
   )(using Meter[F]): Resource[F, Unit] =
     for {
       _    <- Resource.eval(validateConfig(config))

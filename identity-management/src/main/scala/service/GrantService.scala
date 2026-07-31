@@ -25,7 +25,7 @@ trait GrantService[F[_]] {
 object GrantService {
 
   def fromSession[F[_]: Temporal: Tracer](s: Session[F])(using
-    Meter[F]
+      Meter[F]
   ): F[GrantService[F]] =
     for {
       met    <- Instrumented.makeMetrics[F]("service.grant")

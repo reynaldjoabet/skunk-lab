@@ -15,8 +15,10 @@ object Main extends IOApp {
     OtelJava
       .autoConfigured[IO]()
       .evalMap { otel =>
-        (otel.tracerProvider.tracer("ledgerpay").get, otel.meterProvider.meter("ledgerpay").get)
-          .tupled
+        (
+          otel.tracerProvider.tracer("ledgerpay").get,
+          otel.meterProvider.meter("ledgerpay").get
+        ).tupled
       }
       .use { case (tracer, meter) =>
         implicit val T: Tracer[IO] = tracer

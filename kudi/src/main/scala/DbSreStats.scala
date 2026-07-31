@@ -5,24 +5,24 @@ import skunk.implicits.*
 import skunk.Query
 import skunk.Void
 
-final private case class DbSreStats(
-  maxConnections: Long,
-  connectionSaturation: Double,
-  longRunningQueries: Long,
-  oldIdleInTxn: Long,
-  preparedTransactions: Long,
-  invalidIndexes: Long,
-  tablesWithoutPrimaryKey: Long,
-  tablesNeedVacuum: Long,
-  tablesNeedAnalyze: Long,
-  maxAutovacuumAgeSeconds: Long,
-  maxAutoAnalyzeAgeSeconds: Long,
-  maxFreezeAge: Long,
-  inactiveReplicationSlots: Long,
-  maxReplicationSlotRetainedBytes: Long,
-  walRecords: Long,
-  walFpi: Long,
-  walBytes: Long
+private final case class DbSreStats(
+    maxConnections: Long,
+    connectionSaturation: Double,
+    longRunningQueries: Long,
+    oldIdleInTxn: Long,
+    preparedTransactions: Long,
+    invalidIndexes: Long,
+    tablesWithoutPrimaryKey: Long,
+    tablesNeedVacuum: Long,
+    tablesNeedAnalyze: Long,
+    maxAutovacuumAgeSeconds: Long,
+    maxAutoAnalyzeAgeSeconds: Long,
+    maxFreezeAge: Long,
+    inactiveReplicationSlots: Long,
+    maxReplicationSlotRetainedBytes: Long,
+    walRecords: Long,
+    walFpi: Long,
+    walBytes: Long
 )
 
 private val dbSreQ: Query[Void, DbSreStats] = {

@@ -25,7 +25,7 @@ trait WalletService[F[_]] {
 object WalletService {
 
   def fromSession[F[_]: Temporal: Tracer](s: Session[F])(using
-    Meter[F]
+      Meter[F]
   ): F[WalletService[F]] =
     for {
       m       <- Instrumented.makeMetrics[F]("service.wallet")

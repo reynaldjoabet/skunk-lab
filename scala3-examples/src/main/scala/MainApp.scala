@@ -43,7 +43,7 @@ def run(args: List[String]): IO[ExitCode] =
   }
 
 def productionPool[F[_]: Temporal: Tracer: Meter: fs2.io.net.Network: cats.effect.std.Console]
-  : Resource[F, Resource[F, Session[F]]] =
+    : Resource[F, Resource[F, Session[F]]] =
   Session
     .Builder[F]
     // Connection

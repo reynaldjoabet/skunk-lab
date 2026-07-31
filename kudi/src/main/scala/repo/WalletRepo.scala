@@ -76,7 +76,7 @@ object WalletRepo {
   }
 
   def fromSession[F[_]: Temporal: Tracer](s: Session[F])(using
-    Meter[F]
+      Meter[F]
   ): F[WalletRepo[F]] =
     for {
       m          <- Instrumented.makeMetrics[F]("repo.wallet")

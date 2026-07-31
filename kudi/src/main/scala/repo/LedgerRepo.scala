@@ -16,14 +16,14 @@ import skunk.implicits.*
 trait LedgerRepo[F[_]] {
 
   def insertEntry(
-    txnId: Long,
-    txnCreatedAt: java.time.OffsetDateTime,
-    walletId: Long,
-    amount: BigDecimal,
-    balanceAfter: BigDecimal,
-    entryTypeId: EntryTypeId,
-    currencyCode: String,
-    description: Option[String]
+      txnId: Long,
+      txnCreatedAt: java.time.OffsetDateTime,
+      walletId: Long,
+      amount: BigDecimal,
+      balanceAfter: BigDecimal,
+      entryTypeId: EntryTypeId,
+      currencyCode: String,
+      description: Option[String]
   ): F[LedgerEntry]
 
   def findByWallet(walletId: Long, limit: Int): F[List[LedgerEntry]]
@@ -67,7 +67,7 @@ object LedgerRepo {
   }
 
   def fromSession[F[_]: Temporal: Tracer](s: Session[F])(using
-    Meter[F]
+      Meter[F]
   ): F[LedgerRepo[F]] =
     for {
       m         <- Instrumented.makeMetrics[F]("repo.ledger")
@@ -77,14 +77,14 @@ object LedgerRepo {
     } yield new LedgerRepo[F] {
 
       def insertEntry(
-        txnId: Long,
-        txnCreatedAt: java.time.OffsetDateTime,
-        walletId: Long,
-        amount: BigDecimal,
-        balanceAfter: BigDecimal,
-        entryTypeId: EntryTypeId,
-        currencyCode: String,
-        description: Option[String]
+          txnId: Long,
+          txnCreatedAt: java.time.OffsetDateTime,
+          walletId: Long,
+          amount: BigDecimal,
+          balanceAfter: BigDecimal,
+          entryTypeId: EntryTypeId,
+          currencyCode: String,
+          description: Option[String]
       ): F[LedgerEntry] =
         Instrumented.trace(
           "LedgerRepo.insertEntry",

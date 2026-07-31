@@ -94,8 +94,7 @@ object BillingService {
                                  MonadCancelThrow[F].raiseError(AlreadyInvoiced())
                                }
                   // Write line items
-                  _ <- prev
-                         .lineItems
+                  _ <- prev.lineItems
                          .traverse_ { li =>
                            invoices.addLineItem(
                              invoice.id,

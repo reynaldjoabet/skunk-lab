@@ -13,12 +13,12 @@ import skunk._
 object Database {
 
   def pool[F[_]: Temporal: Tracer: Meter: Console: Network](
-    host: String,
-    port: Int,
-    user: String,
-    password: String,
-    database: String,
-    maxConns: Int
+      host: String,
+      port: Int,
+      user: String,
+      password: String,
+      database: String,
+      maxConns: Int
   ): Resource[F, Resource[F, Session[F]]] =
     Session
       .Builder[F]

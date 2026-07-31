@@ -36,7 +36,7 @@ object Joins {
   }
 
   final class EmployeeRepository[M[_]: Sync](
-    sessionPool: Resource[M, Session[M]]
+      sessionPool: Resource[M, Session[M]]
   ) {
 
     import EmployeeQueries._
@@ -48,15 +48,13 @@ object Joins {
           .map(_.groupBy(_._2))
           .map { m =>
             m.map { case (empId, list) =>
-                val employeeSalaryJoinRecords =
-                  makeSingleEmployeeSalary(empId, list)
-                employeeSalaryJoinRecords
-                  .tail
-                  .foldLeft(employeeSalaryJoinRecords.head)(
-                    Semigroup[Employee].combine
-                  )
-              }
-              .toList
+              val employeeSalaryJoinRecords =
+                makeSingleEmployeeSalary(empId, list)
+              employeeSalaryJoinRecords.tail
+                .foldLeft(employeeSalaryJoinRecords.head)(
+                  Semigroup[Employee].combine
+                )
+            }.toList
           }
       }
 
@@ -70,8 +68,8 @@ object Joins {
     }
 
     private def makeSingleEmployeeSalary(
-      empId: String,
-      empSalaries: List[String ~ Int ~ BigDecimal ~ String]
+        empId: String,
+        empSalaries: List[String ~ Int ~ BigDecimal ~ String]
     ): List[Employee] = {
       empSalaries.map { case ename ~ month ~ amount ~ eid =>
         Employee(eid, ename, List(Salary(eid, month, amount)))
@@ -85,21 +83,20 @@ object Joins {
           .map(_.groupBy(_._2))
           .map { m =>
             m.map { case (empId, list) =>
-                // we know the list is non-empty because it is the result of a groupBy
-                val nel = NonEmptyList.fromListUnsafe(list)
+              // we know the list is non-empty because it is the result of a groupBy
+              val nel = NonEmptyList.fromListUnsafe(list)
 
-                val employeeSalaryJoinRecords =
-                  makeSingleEmployeeSalary(empId, nel)
-                employeeSalaryJoinRecords.reduce
-              }
-              .toList
+              val employeeSalaryJoinRecords =
+                makeSingleEmployeeSalary(empId, nel)
+              employeeSalaryJoinRecords.reduce
+            }.toList
           }
       }
     }
 
     private def makeSingleEmployeeSalary(
-      empId: String,
-      empSalaries: NonEmptyList[String ~ Int ~ BigDecimal ~ String]
+        empId: String,
+        empSalaries: NonEmptyList[String ~ Int ~ BigDecimal ~ String]
     ): NonEmptyList[Employee] = {
       empSalaries.map { case ename ~ month ~ amount ~ eid =>
         Employee(eid, ename, List(Salary(eid, month, amount)))
@@ -107,11 +104,10 @@ object Joins {
     }
 
     private def mkEmployee(
-      // all the rows for a single employee
-      empSalaries: NonEmptyList[String ~ Int ~ BigDecimal ~ String]
+        // all the rows for a single employee
+        empSalaries: NonEmptyList[String ~ Int ~ BigDecimal ~ String]
     ): Employee = {
-      val salaries = empSalaries
-        .toList
+      val salaries = empSalaries.toList
         .map { case _ ~ month ~ amount ~ eid =>
           Salary(eid, month, amount)
         }

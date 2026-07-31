@@ -17,14 +17,10 @@ import skunk.implicits._
 case class BalanceChangeEvent(accountId: UUID, newBalance: BigDecimal, txId: UUID)
 object BalanceChangeEvent {
 
-  implicit val encoder: io.circe.Encoder[BalanceChangeEvent] = io
-    .circe
-    .Encoder
+  implicit val encoder: io.circe.Encoder[BalanceChangeEvent] = io.circe.Encoder
     .forProduct3("accountId", "newBalance", "txId")(e => (e.accountId, e.newBalance, e.txId))
 
-  implicit val decoder: io.circe.Decoder[BalanceChangeEvent] = io
-    .circe
-    .Decoder
+  implicit val decoder: io.circe.Decoder[BalanceChangeEvent] = io.circe.Decoder
     .forProduct3("accountId", "newBalance", "txId")(BalanceChangeEvent.apply)
 
 }
@@ -40,8 +36,8 @@ object NotificationService {
 
   // Use a DEDICATED session for LISTEN — never share with query traffic
   def make[F[_]: Concurrent](
-    listenerSession: Session[F], // dedicated session for LISTEN
-    writerSession: Session[F]    // any session (or pooled) for NOTIFY
+      listenerSession: Session[F], // dedicated session for LISTEN
+      writerSession: Session[F]    // any session (or pooled) for NOTIFY
   ): NotificationService[F] =
     new NotificationService[F] {
 

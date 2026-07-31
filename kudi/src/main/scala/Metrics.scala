@@ -22,7 +22,7 @@ case class Metrics(meter: Meter[IO], metrics: List[Metric[IO, ?]]) {
     * The interceptor which can be added to a server's options, to enable metrics collection.
     */
   def metricsInterceptor(
-    ignoreEndpoints: Seq[AnyEndpoint] = Seq.empty
+      ignoreEndpoints: Seq[AnyEndpoint] = Seq.empty
   ): MetricsRequestInterceptor[IO] =
     new MetricsRequestInterceptor[IO](metrics, ignoreEndpoints)
 
@@ -88,23 +88,23 @@ object Metrics {
   def noop: Metrics = Metrics(Meter.noop[IO], Nil)
 
   private def decreaseCounter(
-    req: ServerRequest,
-    counter: UpDownCounter[IO, Long],
-    m: MonadError[IO],
-    ep: AnyEndpoint
+      req: ServerRequest,
+      counter: UpDownCounter[IO, Long],
+      m: MonadError[IO],
+      ep: AnyEndpoint
   ) =
     m.suspend(counter.dec(asOpenTelemetryAttributes(ep, req)*))
 
   private def increaseCounter(
-    req: ServerRequest,
-    counter: UpDownCounter[IO, Long],
-    m: MonadError[IO],
-    ep: AnyEndpoint
+      req: ServerRequest,
+      counter: UpDownCounter[IO, Long],
+      m: MonadError[IO],
+      ep: AnyEndpoint
   ) =
     m.suspend(counter.inc(asOpenTelemetryAttributes(ep, req)*))
 
   private def requestActive(
-    meter: Meter[IO]
+      meter: Meter[IO]
   ): IO[Metric[IO, UpDownCounter[IO, Long]]] =
     meter
       .upDownCounter[Long]("http.server.active_requests")
@@ -258,8 +258,7 @@ object Metrics {
               EndpointMetric().onResponseBody { (endpoint, response) =>
                 m.eval {
                   val otLabels = asOpenTelemetryAttributes(endpoint, req)
-                  response
-                    .body
+                  response.body
                     .foreach {
                       case Right((_, Some(length: Long))) => recorder.record(length, otLabels*)
                       case _                              => m.unit(())
@@ -271,22 +270,19 @@ object Metrics {
       }
 
   private def asOpenTelemetryAttributes(ep: AnyEndpoint, req: ServerRequest) =
-    labels
-      .forEndpoint
+    labels.forEndpoint
       .map { case (name, f) =>
         Attribute(AttributeKey.string(name), f(ep))
-      } ++ labels
-      .forRequest
+      } ++ labels.forRequest
       .map { case (name, f) =>
         Attribute(AttributeKey.string(name), f(req))
       }
 
   private def asOpenTelemetryAttributes(
-    res: Either[Throwable, ServerResponse[?]],
-    phase: Option[String]
+      res: Either[Throwable, ServerResponse[?]],
+      phase: Option[String]
   ) = {
-    val attributes = labels
-      .forResponse
+    val attributes = labels.forResponse
       .foldLeft(List.empty[Attribute[String]]) { (b, label) =>
         b :+ Attribute(AttributeKey.string(label._1), label._2(res).getOrElse(""))
       }

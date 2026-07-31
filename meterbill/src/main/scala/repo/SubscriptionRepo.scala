@@ -50,12 +50,10 @@ object SubscriptionRepo {
         .query(subscription)
 
     val doCancel: Command[UUID] =
-      sql"UPDATE subscriptions SET status = 'canceled', canceled_at = now() WHERE id = $uuid"
-        .command
+      sql"UPDATE subscriptions SET status = 'canceled', canceled_at = now() WHERE id = $uuid".command
 
     val doAdvance: Command[OffsetDateTime *: OffsetDateTime *: UUID *: EmptyTuple] =
-      sql"UPDATE subscriptions SET current_period_start = $timestamptz, current_period_end = $timestamptz WHERE id = $uuid"
-        .command
+      sql"UPDATE subscriptions SET current_period_start = $timestamptz, current_period_end = $timestamptz WHERE id = $uuid".command
 
   }
 

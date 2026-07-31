@@ -7,8 +7,8 @@ sealed abstract class Todo[+TodoId] extends Product with Serializable {
   import Todo._
 
   final def fold[B](
-    ifExisting: (TodoId, Data) => B,
-    ifData: (String, LocalDateTime) => B
+      ifExisting: (TodoId, Data) => B,
+      ifData: (String, LocalDateTime) => B
   ): B =
     this match {
       case Existing(id, data)          => ifExisting(id, data)
@@ -29,7 +29,7 @@ object Todo {
 
   final case class Existing[TodoId](id: TodoId, data: Data) extends Todo[TodoId] {
 
-    override protected type ThisType = Existing[TodoId]
+    protected override type ThisType = Existing[TodoId]
 
     override def description: String =
       data.description
@@ -47,7 +47,7 @@ object Todo {
 
   final case class Data(description: String, deadline: LocalDateTime) extends Todo[Nothing] {
 
-    override protected type ThisType = Data
+    protected override type ThisType = Data
 
     override def withUpdatedDescription(newDescription: String): ThisType =
       copy(description = newDescription)

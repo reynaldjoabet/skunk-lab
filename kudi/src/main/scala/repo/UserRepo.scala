@@ -33,7 +33,7 @@ object UserRepo {
   private object SQL {
 
     val insert
-      : Query[String *: String *: String *: String *: String *: String *: EmptyTuple, User] =
+        : Query[String *: String *: String *: String *: String *: String *: EmptyTuple, User] =
       sql"""
         INSERT INTO users (email, phone, first_name, last_name, country_code, password_hash)
         VALUES ($text, $text, $text, $text, $text, $text)
@@ -58,7 +58,7 @@ object UserRepo {
   }
 
   def fromSession[F[_]: Temporal: Tracer](s: Session[F])(using
-    Meter[F]
+      Meter[F]
   ): F[UserRepo[F]] =
     for {
       m            <- Instrumented.makeMetrics[F]("repo.user")

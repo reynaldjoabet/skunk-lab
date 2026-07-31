@@ -15,13 +15,13 @@ import skunk.Session
 trait AuditService[F[_]] {
 
   def logAction(
-    actorId: Option[Long],
-    action: String,
-    entityType: String,
-    entityId: String,
-    ipAddress: Option[String],
-    oldValues: Option[Json],
-    newValues: Option[Json]
+      actorId: Option[Long],
+      action: String,
+      entityType: String,
+      entityId: String,
+      ipAddress: Option[String],
+      oldValues: Option[Json],
+      newValues: Option[Json]
   ): F[Unit]
 
   def getHistory(entityType: String, entityId: String, limit: Int): F[List[AuditLogEntry]]
@@ -31,7 +31,7 @@ trait AuditService[F[_]] {
 object AuditService {
 
   def fromSession[F[_]: Temporal: Tracer](s: Session[F])(using
-    Meter[F]
+      Meter[F]
   ): F[AuditService[F]] =
     for {
       m    <- Instrumented.makeMetrics[F]("service.audit")
@@ -39,13 +39,13 @@ object AuditService {
     } yield new AuditService[F] {
 
       def logAction(
-        actorId: Option[Long],
-        action: String,
-        entityType: String,
-        entityId: String,
-        ipAddress: Option[String],
-        oldValues: Option[Json],
-        newValues: Option[Json]
+          actorId: Option[Long],
+          action: String,
+          entityType: String,
+          entityId: String,
+          ipAddress: Option[String],
+          oldValues: Option[Json],
+          newValues: Option[Json]
       ): F[Unit] =
         Instrumented.trace("AuditService.logAction", m, Attribute("audit.action", action))(
           repo.log(actorId, action, entityType, entityId, ipAddress, oldValues, newValues)

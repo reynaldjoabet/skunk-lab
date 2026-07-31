@@ -49,7 +49,7 @@ object ApiScopeRepo {
   }
 
   def fromSession[F[_]: Temporal: Tracer](s: Session[F])(using
-    Meter[F]
+      Meter[F]
   ): F[ApiScopeRepo[F]] =
     for {
       m           <- Instrumented.makeMetrics[F]("repo.api_scope")

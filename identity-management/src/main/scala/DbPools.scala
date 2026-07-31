@@ -20,29 +20,29 @@ import skunk.*
 // ── Configuration ──────────────────────────────────────────────────────
 
 case class DbConfig(
-  primaryHost: String,
-  replicaHost: String,
-  port: Int,
-  user: String,
-  password: String,
-  database: String,
-  writerPoolSize: Int,
-  readerPoolSize: Int,
-  writerReadTimeout: Duration,
-  readerReadTimeout: Duration,
-  writerStatementTimeout: Int,
-  readerStatementTimeout: Int,
-  idleInTransactionTimeout: Int,
-  lockTimeout: Int,
-  tcpKeepalivesIdle: Int,
-  tcpKeepalivesInterval: Int,
-  tcpKeepalivesCount: Int,
-  ssl: String,
-  applicationName: String,
-  workMem: String,
-  commandCacheSize: Int,
-  queryCacheSize: Int,
-  parseCacheSize: Int
+    primaryHost: String,
+    replicaHost: String,
+    port: Int,
+    user: String,
+    password: String,
+    database: String,
+    writerPoolSize: Int,
+    readerPoolSize: Int,
+    writerReadTimeout: Duration,
+    readerReadTimeout: Duration,
+    writerStatementTimeout: Int,
+    readerStatementTimeout: Int,
+    idleInTransactionTimeout: Int,
+    lockTimeout: Int,
+    tcpKeepalivesIdle: Int,
+    tcpKeepalivesInterval: Int,
+    tcpKeepalivesCount: Int,
+    ssl: String,
+    applicationName: String,
+    workMem: String,
+    commandCacheSize: Int,
+    queryCacheSize: Int,
+    parseCacheSize: Int
 )
 
 object DbConfig {
@@ -62,9 +62,9 @@ case class AppConfig(db: DbConfig)
 // ── Pool metrics ───────────────────────────────────────────────────────
 
 case class PoolMetrics[F[_]](
-  checkedOut: UpDownCounter[F, Long],
-  acquisitionTime: Histogram[F, Double],
-  errors: Counter[F, Long]
+    checkedOut: UpDownCounter[F, Long],
+    acquisitionTime: Histogram[F, Double],
+    errors: Counter[F, Long]
 )
 
 object PoolMetrics {
@@ -86,9 +86,9 @@ object PoolMetrics {
     } yield PoolMetrics(co, at, er)
 
   def instrument[F[_]: Temporal: Tracer](
-    pool: Resource[F, Session[F]],
-    metrics: PoolMetrics[F],
-    poolAttr: Attribute[String]
+      pool: Resource[F, Session[F]],
+      metrics: PoolMetrics[F],
+      poolAttr: Attribute[String]
   ): Resource[F, Session[F]] =
     Resource
       .eval(Clock[F].monotonic)
@@ -100,8 +100,7 @@ object PoolMetrics {
               elapsed = (end - start).toUnit(MILLISECONDS)
               _      <- metrics.acquisitionTime.record(elapsed, poolAttr)
               _      <- metrics.checkedOut.add(1L, poolAttr)
-              _      <- Tracer[F]
-                     .currentSpanOrNoop
+              _      <- Tracer[F].currentSpanOrNoop
                      .flatMap(
                        _.addAttribute(Attribute("db.pool.acquisition_time_ms", elapsed))
                      )
@@ -111,8 +110,7 @@ object PoolMetrics {
           .handleErrorWith { (err: Throwable) =>
             Resource.eval(
               metrics.errors.add(1L, poolAttr) *>
-                Tracer[F]
-                  .currentSpanOrNoop
+                Tracer[F].currentSpanOrNoop
                   .flatMap { span =>
                     span.addAttribute(Attribute("error", true)) *>
                       span.setStatus(StatusCode.Error, err.getMessage)
@@ -126,14 +124,14 @@ object PoolMetrics {
 // ── Pool construction ──────────────────────────────────────────────────
 
 case class DbPools[F[_]](
-  writer: Resource[F, Session[F]],
-  reader: Resource[F, Session[F]]
+    writer: Resource[F, Session[F]],
+    reader: Resource[F, Session[F]]
 )
 
 object DbPools {
 
   def make[F[_]: Temporal: Tracer: Meter: Console: Network](
-    cfg: AppConfig
+      cfg: AppConfig
   ): Resource[F, DbPools[F]] = {
     val db  = cfg.db
     val ssl = DbConfig.resolveSSL(db.ssl)

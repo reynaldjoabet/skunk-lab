@@ -16,9 +16,9 @@ import skunk.implicits.*
 trait MfaRepo[F[_]] {
 
   def addMethod(
-    userId: Long,
-    methodTypeId: MfaMethodTypeId,
-    phoneNumber: Option[String]
+      userId: Long,
+      methodTypeId: MfaMethodTypeId,
+      phoneNumber: Option[String]
   ): F[MfaMethod]
 
   def findByUser(userId: Long): F[List[MfaMethod]]
@@ -51,8 +51,7 @@ object MfaRepo {
       sql"""UPDATE auth.mfa_methods SET is_primary = false WHERE user_id = $int8""".command
 
     val setPrimary: Command[Long *: Long *: EmptyTuple] =
-      sql"""UPDATE auth.mfa_methods SET is_primary = true WHERE mfa_id = $int8 AND user_id = $int8"""
-        .command
+      sql"""UPDATE auth.mfa_methods SET is_primary = true WHERE mfa_id = $int8 AND user_id = $int8""".command
 
     val verify: Command[Long] =
       sql"""UPDATE auth.mfa_methods SET is_verified = true WHERE mfa_id = $int8""".command
@@ -66,7 +65,7 @@ object MfaRepo {
   }
 
   def fromSession[F[_]: Temporal: Tracer](s: Session[F])(using
-    Meter[F]
+      Meter[F]
   ): F[MfaRepo[F]] =
     for {
       m           <- Instrumented.makeMetrics[F]("repo.mfa")
@@ -80,9 +79,9 @@ object MfaRepo {
     } yield new MfaRepo[F] {
 
       def addMethod(
-        userId: Long,
-        methodTypeId: MfaMethodTypeId,
-        phoneNumber: Option[String]
+          userId: Long,
+          methodTypeId: MfaMethodTypeId,
+          phoneNumber: Option[String]
       ): F[MfaMethod] =
         Instrumented.trace("MfaRepo.addMethod", m, Attribute("user.id", userId))(
           pInsert.unique((userId, methodTypeId.value, phoneNumber))

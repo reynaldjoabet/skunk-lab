@@ -16,10 +16,10 @@ import skunk.implicits.*
 trait RoleRepo[F[_]] {
 
   def assignRole(
-    userId: Long,
-    roleId: RoleId,
-    grantedBy: Option[Long],
-    expiresAt: Option[java.time.OffsetDateTime]
+      userId: Long,
+      roleId: RoleId,
+      grantedBy: Option[Long],
+      expiresAt: Option[java.time.OffsetDateTime]
   ): F[Unit]
 
   def revokeRole(userId: Long, roleId: RoleId): F[Unit]
@@ -88,7 +88,7 @@ object RoleRepo {
   }
 
   def fromSession[F[_]: Temporal: Tracer](s: Session[F])(using
-    Meter[F]
+      Meter[F]
   ): F[RoleRepo[F]] =
     for {
       m        <- Instrumented.makeMetrics[F]("repo.role")
@@ -100,10 +100,10 @@ object RoleRepo {
     } yield new RoleRepo[F] {
 
       def assignRole(
-        userId: Long,
-        roleId: RoleId,
-        grantedBy: Option[Long],
-        expiresAt: Option[java.time.OffsetDateTime]
+          userId: Long,
+          roleId: RoleId,
+          grantedBy: Option[Long],
+          expiresAt: Option[java.time.OffsetDateTime]
       ): F[Unit] =
         Instrumented.trace(
           "RoleRepo.assignRole",

@@ -18,13 +18,13 @@ import skunk.implicits.*
 trait AuditRepo[F[_]] {
 
   def log(
-    actorId: Option[Long],
-    action: String,
-    entityType: String,
-    entityId: String,
-    ipAddress: Option[String],
-    oldValues: Option[Json],
-    newValues: Option[Json]
+      actorId: Option[Long],
+      action: String,
+      entityType: String,
+      entityId: String,
+      ipAddress: Option[String],
+      oldValues: Option[Json],
+      newValues: Option[Json]
   ): F[Unit]
 
   def findByEntity(entityType: String, entityId: String, limit: Int): F[List[AuditLogEntry]]
@@ -58,7 +58,7 @@ object AuditRepo {
   }
 
   def fromSession[F[_]: Temporal: Tracer](s: Session[F])(using
-    Meter[F]
+      Meter[F]
   ): F[AuditRepo[F]] =
     for {
       m       <- Instrumented.makeMetrics[F]("repo.audit")
@@ -67,13 +67,13 @@ object AuditRepo {
     } yield new AuditRepo[F] {
 
       def log(
-        actorId: Option[Long],
-        action: String,
-        entityType: String,
-        entityId: String,
-        ipAddress: Option[String],
-        oldValues: Option[Json],
-        newValues: Option[Json]
+          actorId: Option[Long],
+          action: String,
+          entityType: String,
+          entityId: String,
+          ipAddress: Option[String],
+          oldValues: Option[Json],
+          newValues: Option[Json]
       ): F[Unit] =
         Instrumented.trace(
           "AuditRepo.log",

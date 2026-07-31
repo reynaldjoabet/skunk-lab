@@ -18,8 +18,8 @@ import skunk.data.TransactionIsolationLevel
 object TransferServiceV2 {
 
   def fromSession[F[_]: MonadCancelThrow: Concurrent](
-    s: Session[F],
-    notifications: NotificationService[F]
+      s: Session[F],
+      notifications: NotificationService[F]
   ): F[TransferService[F]] =
     (
       AccountRepo.fromSession(s),
@@ -78,9 +78,8 @@ object TransferServiceV2 {
                 // Velocity check
                 check <- velocity.checkDailyLimit(src.id, req.amount)
                 _     <-
-                  check.leftTraverse(msg =>
-                    MonadCancelThrow[F].raiseError[Unit](new Exception(msg))
-                  )
+                  check
+                    .leftTraverse(msg => MonadCancelThrow[F].raiseError[Unit](new Exception(msg)))
 
                 // Execute
                 _  <- accounts.updateBalance(src.id, src.balance - req.amount)

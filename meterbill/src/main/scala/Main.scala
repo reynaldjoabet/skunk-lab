@@ -44,9 +44,9 @@ object Main extends IOApp.Simple {
   extension [A](res: => Resource[IO, A]) {
 
     def tracedAcquire(
-      name: String
+        name: String
     )(using
-      Tracer[IO]
+        Tracer[IO]
     ): Resource[IO, A] =
       Tracer[IO]
         .span(name + ".acquire")

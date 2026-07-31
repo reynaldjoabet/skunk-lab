@@ -16,10 +16,10 @@ trait ClientConfigService[F[_]] {
   def getClient(clientId: String): F[Option[Client]]
 
   def registerClient(
-    cmd: CreateClient,
-    scopes: List[String],
-    grantTypes: List[String],
-    redirectUris: List[String]
+      cmd: CreateClient,
+      scopes: List[String],
+      grantTypes: List[String],
+      redirectUris: List[String]
   ): F[Client]
 
   def deleteClient(id: Int): F[Unit]
@@ -30,7 +30,7 @@ trait ClientConfigService[F[_]] {
 object ClientConfigService {
 
   def fromSession[F[_]: Temporal: Tracer](s: Session[F])(using
-    Meter[F]
+      Meter[F]
   ): F[ClientConfigService[F]] =
     for {
       met     <- Instrumented.makeMetrics[F]("service.client_config")
@@ -43,10 +43,10 @@ object ClientConfigService {
         )
 
       def registerClient(
-        cmd: CreateClient,
-        scopes: List[String],
-        grantTypes: List[String],
-        redirectUris: List[String]
+          cmd: CreateClient,
+          scopes: List[String],
+          grantTypes: List[String],
+          redirectUris: List[String]
       ): F[Client] =
         Instrumented.trace("ClientConfigService.registerClient", met) {
           for {

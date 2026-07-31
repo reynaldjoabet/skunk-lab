@@ -27,7 +27,7 @@ trait ResourceConfigService[F[_]] {
 object ResourceConfigService {
 
   def fromSession[F[_]: Temporal: Tracer](s: Session[F])(using
-    Meter[F]
+      Meter[F]
   ): F[ResourceConfigService[F]] =
     for {
       met    <- Instrumented.makeMetrics[F]("service.resource_config")

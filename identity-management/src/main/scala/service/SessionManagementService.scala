@@ -24,7 +24,7 @@ trait SessionManagementService[F[_]] {
 object SessionManagementService {
 
   def fromSession[F[_]: Temporal: Tracer](s: Session[F])(using
-    Meter[F]
+      Meter[F]
   ): F[SessionManagementService[F]] =
     for {
       met      <- Instrumented.makeMetrics[F]("service.session_mgmt")

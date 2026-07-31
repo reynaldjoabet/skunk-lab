@@ -15,19 +15,19 @@ import skunk.Session
 trait AuthService[F[_]] {
 
   def login(
-    email: String,
-    password: String,
-    ipAddress: String,
-    userAgent: Option[String]
+      email: String,
+      password: String,
+      ipAddress: String,
+      userAgent: Option[String]
   ): F[PasswordVerifyResult]
 
   def createSession(
-    userId: Long,
-    tokenHash: Array[Byte],
-    ipAddress: String,
-    userAgent: Option[String],
-    deviceFingerprint: Option[String],
-    ttlHours: Int
+      userId: Long,
+      tokenHash: Array[Byte],
+      ipAddress: String,
+      userAgent: Option[String],
+      deviceFingerprint: Option[String],
+      ttlHours: Int
   ): F[Long]
 
   def revokeSession(sessionId: Long, reasonId: SessionRevokeReasonId): F[Unit]
@@ -41,7 +41,7 @@ trait AuthService[F[_]] {
 object AuthService {
 
   def fromSession[F[_]: Temporal: Tracer](s: Session[F])(using
-    m: Meter[F]
+      m: Meter[F]
   ): F[AuthService[F]] =
     for {
       met        <- Instrumented.makeMetrics[F]("service.auth")
@@ -59,10 +59,10 @@ object AuthService {
         loginCount.add(1L, Attribute("login.outcome", outcome))
 
       def login(
-        email: String,
-        password: String,
-        ipAddress: String,
-        userAgent: Option[String]
+          email: String,
+          password: String,
+          ipAddress: String,
+          userAgent: Option[String]
       ): F[PasswordVerifyResult] =
         Instrumented.trace("AuthService.login", met) {
           for {
@@ -94,12 +94,12 @@ object AuthService {
         }
 
       def createSession(
-        userId: Long,
-        tokenHash: Array[Byte],
-        ipAddress: String,
-        userAgent: Option[String],
-        deviceFingerprint: Option[String],
-        ttlHours: Int
+          userId: Long,
+          tokenHash: Array[Byte],
+          ipAddress: String,
+          userAgent: Option[String],
+          deviceFingerprint: Option[String],
+          ttlHours: Int
       ): F[Long] =
         Instrumented.trace("AuthService.createSession", met, Attribute("user.id", userId))(
           for {

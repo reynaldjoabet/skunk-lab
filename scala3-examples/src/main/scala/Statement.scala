@@ -7,8 +7,8 @@ import skunk.implicits._
 
 object Statement {
 
-  implicit final private class TodoDataCompanionOps(
-    private val data: Todo.Data.type
+  private final implicit class TodoDataCompanionOps(
+      private val data: Todo.Data.type
   ) {
 
     val codec: Codec[Todo.Data] =
@@ -16,8 +16,8 @@ object Statement {
 
   }
 
-  implicit final private class TodoExistingCompanionOps(
-    private val existing: Todo.Existing.type
+  private final implicit class TodoExistingCompanionOps(
+      private val existing: Todo.Existing.type
   ) {
 
     val codec: Codec[Todo.Existing[UUID]] =
@@ -81,7 +81,7 @@ object Statement {
     }
 
     private def toTwiddle(
-      e: Todo.Existing[UUID]
+        e: Todo.Existing[UUID]
     ): (String, LocalDateTime, UUID) =
       e.data.description *: e.data.deadline *: e.id *: EmptyTuple
 

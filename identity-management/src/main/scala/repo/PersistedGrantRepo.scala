@@ -46,8 +46,7 @@ object PersistedGrantRepo {
     ] =
       sql"""
         INSERT INTO idmgmt.persisted_grants (key, type, subject_id, session_id, client_id, description, creation_time, expiration, data)
-        VALUES (${text.opt}, $text, ${text.opt}, ${text.opt}, $text, ${text
-          .opt}, $timestamptz, ${timestamptz.opt}, $text)
+        VALUES (${text.opt}, $text, ${text.opt}, ${text.opt}, $text, ${text.opt}, $timestamptz, ${timestamptz.opt}, $text)
         RETURNING #$cols
       """.query(persistedGrant)
 
@@ -55,13 +54,12 @@ object PersistedGrantRepo {
       sql"DELETE FROM idmgmt.persisted_grants WHERE key = $text".command
 
     val deleteExpired: Command[Void] =
-      sql"DELETE FROM idmgmt.persisted_grants WHERE expiration IS NOT NULL AND expiration < now()"
-        .command
+      sql"DELETE FROM idmgmt.persisted_grants WHERE expiration IS NOT NULL AND expiration < now()".command
 
   }
 
   def fromSession[F[_]: Temporal: Tracer](s: Session[F])(using
-    Meter[F]
+      Meter[F]
   ): F[PersistedGrantRepo[F]] =
     for {
       m              <- Instrumented.makeMetrics[F]("repo.persisted_grant")

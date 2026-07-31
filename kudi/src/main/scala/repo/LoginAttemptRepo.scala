@@ -16,12 +16,12 @@ import skunk.implicits.*
 trait LoginAttemptRepo[F[_]] {
 
   def record(
-    userId: Option[Long],
-    success: Boolean,
-    identifier: String,
-    ipAddress: String,
-    userAgent: Option[String],
-    failureReason: Option[String]
+      userId: Option[Long],
+      success: Boolean,
+      identifier: String,
+      ipAddress: String,
+      userAgent: Option[String],
+      failureReason: Option[String]
   ): F[Unit]
 
   def findRecent(identifier: String, limit: Int): F[List[LoginAttempt]]
@@ -62,7 +62,7 @@ object LoginAttemptRepo {
   }
 
   def fromSession[F[_]: Temporal: Tracer](s: Session[F])(using
-    Meter[F]
+      Meter[F]
   ): F[LoginAttemptRepo[F]] =
     for {
       m       <- Instrumented.makeMetrics[F]("repo.login_attempt")
@@ -72,12 +72,12 @@ object LoginAttemptRepo {
     } yield new LoginAttemptRepo[F] {
 
       def record(
-        userId: Option[Long],
-        success: Boolean,
-        identifier: String,
-        ipAddress: String,
-        userAgent: Option[String],
-        failureReason: Option[String]
+          userId: Option[Long],
+          success: Boolean,
+          identifier: String,
+          ipAddress: String,
+          userAgent: Option[String],
+          failureReason: Option[String]
       ): F[Unit] =
         Instrumented.trace("LoginAttemptRepo.record", m, Attribute("login.success", success))(
           pInsert.execute((userId, success, identifier, ipAddress, userAgent, failureReason)).void

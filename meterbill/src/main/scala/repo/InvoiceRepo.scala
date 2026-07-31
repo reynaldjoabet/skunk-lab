@@ -15,22 +15,22 @@ import skunk.implicits._
 trait InvoiceRepo[F[_]] {
 
   def create(
-    tenantId: UUID,
-    subId: UUID,
-    periodStart: OffsetDateTime,
-    periodEnd: OffsetDateTime,
-    baseAmount: Long,
-    overageUnits: Long,
-    overageAmount: Long,
-    totalAmount: Long
+      tenantId: UUID,
+      subId: UUID,
+      periodStart: OffsetDateTime,
+      periodEnd: OffsetDateTime,
+      baseAmount: Long,
+      overageUnits: Long,
+      overageAmount: Long,
+      totalAmount: Long
   ): F[Invoice]
 
   def addLineItem(
-    invoiceId: UUID,
-    desc: String,
-    qty: Long,
-    unitPrice: Long,
-    amount: Long
+      invoiceId: UUID,
+      desc: String,
+      qty: Long,
+      unitPrice: Long,
+      amount: Long
   ): F[LineItem]
 
   def findById(id: UUID): F[Option[Invoice]]
@@ -105,14 +105,14 @@ object InvoiceRepo {
       new InvoiceRepo[F] {
 
         def create(
-          tid: UUID,
-          sid: UUID,
-          ps: OffsetDateTime,
-          pe: OffsetDateTime,
-          base: Long,
-          ou: Long,
-          oa: Long,
-          total: Long
+            tid: UUID,
+            sid: UUID,
+            ps: OffsetDateTime,
+            pe: OffsetDateTime,
+            base: Long,
+            ou: Long,
+            oa: Long,
+            total: Long
         ) =
           pInsert.unique((tid, sid, ps, pe, base, ou, oa, total))
 

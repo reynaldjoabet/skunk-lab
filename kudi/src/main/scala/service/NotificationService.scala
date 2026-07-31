@@ -16,10 +16,10 @@ trait NotificationService[F[_]] {
   def getPreferences(userId: Long): F[List[NotificationPreference]]
 
   def updatePreference(
-    userId: Long,
-    channelId: NotificationChannelId,
-    eventType: String,
-    isEnabled: Boolean
+      userId: Long,
+      channelId: NotificationChannelId,
+      eventType: String,
+      isEnabled: Boolean
   ): F[Unit]
 
   def getTemplate(code: String): F[Option[NotificationTemplate]]
@@ -29,7 +29,7 @@ trait NotificationService[F[_]] {
 object NotificationService {
 
   def fromSession[F[_]: Temporal: Tracer](s: Session[F])(using
-    Meter[F]
+      Meter[F]
   ): F[NotificationService[F]] =
     for {
       m     <- Instrumented.makeMetrics[F]("service.notification")
@@ -43,10 +43,10 @@ object NotificationService {
         )
 
       def updatePreference(
-        userId: Long,
-        channelId: NotificationChannelId,
-        eventType: String,
-        isEnabled: Boolean
+          userId: Long,
+          channelId: NotificationChannelId,
+          eventType: String,
+          isEnabled: Boolean
       ): F[Unit] =
         Instrumented.trace("NotificationService.updatePreference", m, Attribute("user.id", userId))(
           for {

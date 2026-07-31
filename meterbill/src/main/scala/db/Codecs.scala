@@ -28,15 +28,15 @@ object Codecs {
       .to[Plan]
 
   val subscription: Decoder[Subscription] =
-    (uuid *: uuid *: uuid *: subStatus *: timestamptz *: timestamptz *: timestamptz *: timestamptz
-      .opt *: timestamptz).to[Subscription]
+    (uuid *: uuid *: uuid *: subStatus *: timestamptz *: timestamptz *: timestamptz *: timestamptz.opt *: timestamptz)
+      .to[Subscription]
 
   val usageEvent: Decoder[UsageEvent] =
     (uuid *: uuid *: uuid *: varchar *: int8 *: varchar *: timestamptz).to[UsageEvent]
 
   val invoice: Decoder[Invoice] =
-    (uuid *: uuid *: uuid *: timestamptz *: timestamptz *: int8 *: int8 *: int8 *: int8 *: invoiceStatus *: timestamptz
-      .opt *: timestamptz.opt *: timestamptz).to[Invoice]
+    (uuid *: uuid *: uuid *: timestamptz *: timestamptz *: int8 *: int8 *: int8 *: int8 *: invoiceStatus *: timestamptz.opt *: timestamptz.opt *: timestamptz)
+      .to[Invoice]
 
   val lineItem: Decoder[LineItem] =
     (uuid *: uuid *: text *: int8 *: int8 *: int8).to[LineItem]

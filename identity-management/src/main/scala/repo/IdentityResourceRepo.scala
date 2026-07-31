@@ -49,7 +49,7 @@ object IdentityResourceRepo {
   }
 
   def fromSession[F[_]: Temporal: Tracer](s: Session[F])(using
-    Meter[F]
+      Meter[F]
   ): F[IdentityResourceRepo[F]] =
     for {
       m           <- Instrumented.makeMetrics[F]("repo.identity_resource")

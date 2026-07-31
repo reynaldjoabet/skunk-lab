@@ -1,12 +1,12 @@
 package meterbill.config
 
 case class DbConfig(
-  host: String,
-  port: Int,
-  user: String,
-  password: String,
-  database: String,
-  poolSize: Int
+    host: String,
+    port: Int,
+    user: String,
+    password: String,
+    database: String,
+    poolSize: Int
 )
 
 case class HttpConfig(host: String, port: Int)

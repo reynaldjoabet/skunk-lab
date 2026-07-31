@@ -16,11 +16,11 @@ import skunk.implicits.*
 trait TokenRepo[F[_]] {
 
   def createRefreshToken(
-    sessionId: Long,
-    userId: Long,
-    tokenHash: Array[Byte],
-    tokenFamily: String,
-    ttlHours: Int
+      sessionId: Long,
+      userId: Long,
+      tokenHash: Array[Byte],
+      tokenFamily: String,
+      ttlHours: Int
   ): F[RefreshToken]
 
   def findRefreshTokenByFamily(tokenFamily: String): F[List[RefreshToken]]
@@ -29,12 +29,12 @@ trait TokenRepo[F[_]] {
   def revokeRefreshTokenFamily(tokenFamily: String): F[Unit]
 
   def createApiKey(
-    userId: Long,
-    keyPrefix: String,
-    keyHash: Array[Byte],
-    name: String,
-    scopes: List[String],
-    rateLimitRpm: Int
+      userId: Long,
+      keyPrefix: String,
+      keyHash: Array[Byte],
+      name: String,
+      scopes: List[String],
+      rateLimitRpm: Int
   ): F[ApiKey]
 
   def findApiKeyByPrefix(keyPrefix: String): F[Option[ApiKey]]
@@ -77,8 +77,7 @@ object TokenRepo {
       sql"""UPDATE auth.refresh_tokens SET is_revoked = true WHERE token_id = $int8""".command
 
     val revokeRefreshFamily: Command[String] =
-      sql"""UPDATE auth.refresh_tokens SET is_revoked = true WHERE token_family = $text AND NOT is_revoked"""
-        .command
+      sql"""UPDATE auth.refresh_tokens SET is_revoked = true WHERE token_family = $text AND NOT is_revoked""".command
 
     val insertApiKey: Query[
       Long *: String *: Array[Byte] *: String *: List[String] *: Int *: EmptyTuple,
@@ -112,7 +111,7 @@ object TokenRepo {
   }
 
   def fromSession[F[_]: Temporal: Tracer](s: Session[F])(using
-    Meter[F]
+      Meter[F]
   ): F[TokenRepo[F]] =
     for {
       m               <- Instrumented.makeMetrics[F]("repo.token")
@@ -128,11 +127,11 @@ object TokenRepo {
     } yield new TokenRepo[F] {
 
       def createRefreshToken(
-        sessionId: Long,
-        userId: Long,
-        tokenHash: Array[Byte],
-        tokenFamily: String,
-        ttlHours: Int
+          sessionId: Long,
+          userId: Long,
+          tokenHash: Array[Byte],
+          tokenFamily: String,
+          ttlHours: Int
       ): F[RefreshToken] =
         Instrumented.trace("TokenRepo.createRefreshToken", m, Attribute("user.id", userId))(
           pInsertRefresh.unique((sessionId, userId, tokenHash, tokenFamily, ttlHours))
@@ -159,12 +158,12 @@ object TokenRepo {
         )
 
       def createApiKey(
-        userId: Long,
-        keyPrefix: String,
-        keyHash: Array[Byte],
-        name: String,
-        scopes: List[String],
-        rateLimitRpm: Int
+          userId: Long,
+          keyPrefix: String,
+          keyHash: Array[Byte],
+          name: String,
+          scopes: List[String],
+          rateLimitRpm: Int
       ): F[ApiKey] =
         Instrumented.trace("TokenRepo.createApiKey", m, Attribute("user.id", userId))(
           pInsertApiKey.unique((userId, keyPrefix, keyHash, name, scopes, rateLimitRpm))

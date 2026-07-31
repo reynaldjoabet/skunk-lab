@@ -9,13 +9,13 @@ import cats.syntax.all._
 object PostgresEntityGateway {
 
   def dsl[F[_]: Async](
-    resource: Resource[F, skunk.Session[F]]
+      resource: Resource[F, skunk.Session[F]]
   ): F[EntityGateway[F, UUID]] =
     Async[F].delay {
       new EntityGateway[F, UUID] {
 
         override def writeMany(
-          todos: Vector[Todo[UUID]]
+            todos: Vector[Todo[UUID]]
         ): F[Vector[Todo.Existing[UUID]]] =
           todos.traverse {
             case data: Todo.Data           => insertOne(data)
@@ -32,7 +32,7 @@ object PostgresEntityGateway {
           }
 
         private def updateOne(
-          todo: Todo.Existing[UUID]
+            todo: Todo.Existing[UUID]
         ): F[Todo.Existing[UUID]] =
           resource.use { session =>
             session
@@ -43,7 +43,7 @@ object PostgresEntityGateway {
           }
 
         override def readManyById(
-          ids: Vector[UUID]
+            ids: Vector[UUID]
         ): F[Vector[Todo.Existing[UUID]]] =
           resource.use { session =>
             session
@@ -54,7 +54,7 @@ object PostgresEntityGateway {
           }
 
         override def readManyByPartialDescription(
-          partialDescription: String
+            partialDescription: String
         ): F[Vector[Todo.Existing[UUID]]] =
           resource.use { session =>
             session

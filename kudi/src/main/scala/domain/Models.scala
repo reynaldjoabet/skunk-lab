@@ -181,263 +181,263 @@ object PermissionId {
 // ── Core domain models ───────────────────────────────────────────────
 
 case class User(
-  userId: Long,
-  createdAt: OffsetDateTime,
-  updatedAt: OffsetDateTime,
-  lastLoginAt: Option[OffsetDateTime],
-  dateOfBirth: Option[java.time.LocalDate],
-  riskScore: Int,
-  failedLoginCount: Int,
-  kycStatusId: KycStatusId,
-  isBlocked: Boolean,
-  isPep: Boolean,
-  mfaEnabled: Boolean,
-  email: String,
-  phone: String,
-  firstName: String,
-  lastName: String,
-  countryCode: String,
-  metadata: Json
+    userId: Long,
+    createdAt: OffsetDateTime,
+    updatedAt: OffsetDateTime,
+    lastLoginAt: Option[OffsetDateTime],
+    dateOfBirth: Option[java.time.LocalDate],
+    riskScore: Int,
+    failedLoginCount: Int,
+    kycStatusId: KycStatusId,
+    isBlocked: Boolean,
+    isPep: Boolean,
+    mfaEnabled: Boolean,
+    email: String,
+    phone: String,
+    firstName: String,
+    lastName: String,
+    countryCode: String,
+    metadata: Json
 )
 
 case class CreateUser(
-  email: String,
-  phone: String,
-  firstName: String,
-  lastName: String,
-  countryCode: String,
-  passwordHash: String
+    email: String,
+    phone: String,
+    firstName: String,
+    lastName: String,
+    countryCode: String,
+    passwordHash: String
 )
 
 case class Wallet(
-  walletId: Long,
-  userId: Long,
-  balance: BigDecimal,
-  holdAmount: BigDecimal,
-  lifetimeIn: BigDecimal,
-  lifetimeOut: BigDecimal,
-  dailyLimit: BigDecimal,
-  monthlyLimit: BigDecimal,
-  createdAt: OffsetDateTime,
-  walletTypeId: WalletTypeId,
-  statusId: WalletStatusId,
-  isDefault: Boolean,
-  currencyCode: String,
-  walletTag: Option[String],
-  metadata: Json
+    walletId: Long,
+    userId: Long,
+    balance: BigDecimal,
+    holdAmount: BigDecimal,
+    lifetimeIn: BigDecimal,
+    lifetimeOut: BigDecimal,
+    dailyLimit: BigDecimal,
+    monthlyLimit: BigDecimal,
+    createdAt: OffsetDateTime,
+    walletTypeId: WalletTypeId,
+    statusId: WalletStatusId,
+    isDefault: Boolean,
+    currencyCode: String,
+    walletTag: Option[String],
+    metadata: Json
 )
 
 case class Transaction(
-  txnId: Long,
-  sourceWalletId: Option[Long],
-  destWalletId: Option[Long],
-  amount: BigDecimal,
-  feeAmount: BigDecimal,
-  exchangeRate: Option[BigDecimal],
-  balanceAfter: Option[BigDecimal],
-  createdAt: OffsetDateTime,
-  completedAt: Option[OffsetDateTime],
-  expiresAt: Option[OffsetDateTime],
-  merchantId: Option[Long],
-  relatedTxnId: Option[Long],
-  txnTypeId: TxnTypeId,
-  statusId: TxnStatusId,
-  isSuspicious: Boolean,
-  sourceCurrency: Option[String],
-  destCurrency: Option[String],
-  referenceId: String,
-  description: Option[String],
-  failureReason: Option[String],
-  ipAddress: Option[String],
-  deviceFingerprint: Option[String],
-  metadata: Json
+    txnId: Long,
+    sourceWalletId: Option[Long],
+    destWalletId: Option[Long],
+    amount: BigDecimal,
+    feeAmount: BigDecimal,
+    exchangeRate: Option[BigDecimal],
+    balanceAfter: Option[BigDecimal],
+    createdAt: OffsetDateTime,
+    completedAt: Option[OffsetDateTime],
+    expiresAt: Option[OffsetDateTime],
+    merchantId: Option[Long],
+    relatedTxnId: Option[Long],
+    txnTypeId: TxnTypeId,
+    statusId: TxnStatusId,
+    isSuspicious: Boolean,
+    sourceCurrency: Option[String],
+    destCurrency: Option[String],
+    referenceId: String,
+    description: Option[String],
+    failureReason: Option[String],
+    ipAddress: Option[String],
+    deviceFingerprint: Option[String],
+    metadata: Json
 )
 
 case class LedgerEntry(
-  entryId: Long,
-  txnId: Long,
-  txnCreatedAt: OffsetDateTime,
-  walletId: Long,
-  amount: BigDecimal,
-  balanceAfter: BigDecimal,
-  createdAt: OffsetDateTime,
-  entryTypeId: EntryTypeId,
-  currencyCode: String,
-  description: Option[String],
-  metadata: Json
+    entryId: Long,
+    txnId: Long,
+    txnCreatedAt: OffsetDateTime,
+    walletId: Long,
+    amount: BigDecimal,
+    balanceAfter: BigDecimal,
+    createdAt: OffsetDateTime,
+    entryTypeId: EntryTypeId,
+    currencyCode: String,
+    description: Option[String],
+    metadata: Json
 )
 
 case class AuditLogEntry(
-  logId: Long,
-  actorId: Option[Long],
-  createdAt: OffsetDateTime,
-  action: String,
-  entityType: String,
-  entityId: String,
-  ipAddress: Option[String],
-  userAgent: Option[String],
-  oldValues: Option[Json],
-  newValues: Option[Json],
-  metadata: Json
+    logId: Long,
+    actorId: Option[Long],
+    createdAt: OffsetDateTime,
+    action: String,
+    entityType: String,
+    entityId: String,
+    ipAddress: Option[String],
+    userAgent: Option[String],
+    oldValues: Option[Json],
+    newValues: Option[Json],
+    metadata: Json
 )
 
 // ── Request / command types ──────────────────────────────────────────
 
 case class TransferRequest(
-  sourceWalletId: Long,
-  destWalletId: Long,
-  amount: BigDecimal,
-  currencyCode: String,
-  referenceId: String,
-  description: Option[String]
+    sourceWalletId: Long,
+    destWalletId: Long,
+    amount: BigDecimal,
+    currencyCode: String,
+    referenceId: String,
+    description: Option[String]
 )
 
 case class TopUpRequest(
-  destWalletId: Long,
-  amount: BigDecimal,
-  currencyCode: String,
-  referenceId: String,
-  description: Option[String]
+    destWalletId: Long,
+    amount: BigDecimal,
+    currencyCode: String,
+    referenceId: String,
+    description: Option[String]
 )
 
 case class WithdrawalRequest(
-  sourceWalletId: Long,
-  amount: BigDecimal,
-  currencyCode: String,
-  referenceId: String,
-  description: Option[String]
+    sourceWalletId: Long,
+    amount: BigDecimal,
+    currencyCode: String,
+    referenceId: String,
+    description: Option[String]
 )
 
 // ── Auth domain models ───────────────────────────────────────────────
 
 case class PasswordVerifyResult(
-  userId: Option[Long],
-  isValid: Boolean,
-  isLocked: Boolean
+    userId: Option[Long],
+    isValid: Boolean,
+    isLocked: Boolean
 )
 
 case class AuthSession(
-  sessionId: Long,
-  userId: Long,
-  createdAt: OffsetDateTime,
-  expiresAt: OffsetDateTime,
-  lastActiveAt: OffsetDateTime,
-  revokedAt: Option[OffsetDateTime],
-  revokeReasonId: Option[SessionRevokeReasonId],
-  isActive: Boolean,
-  mfaVerified: Boolean,
-  deviceFingerprint: Option[String],
-  ipAddress: String,
-  userAgent: Option[String],
-  metadata: Json
+    sessionId: Long,
+    userId: Long,
+    createdAt: OffsetDateTime,
+    expiresAt: OffsetDateTime,
+    lastActiveAt: OffsetDateTime,
+    revokedAt: Option[OffsetDateTime],
+    revokeReasonId: Option[SessionRevokeReasonId],
+    isActive: Boolean,
+    mfaVerified: Boolean,
+    deviceFingerprint: Option[String],
+    ipAddress: String,
+    userAgent: Option[String],
+    metadata: Json
 )
 
 case class RefreshToken(
-  tokenId: Long,
-  sessionId: Long,
-  userId: Long,
-  createdAt: OffsetDateTime,
-  expiresAt: OffsetDateTime,
-  usedAt: Option[OffsetDateTime],
-  isRevoked: Boolean,
-  tokenFamily: String
+    tokenId: Long,
+    sessionId: Long,
+    userId: Long,
+    createdAt: OffsetDateTime,
+    expiresAt: OffsetDateTime,
+    usedAt: Option[OffsetDateTime],
+    isRevoked: Boolean,
+    tokenFamily: String
 )
 
 case class LoginAttempt(
-  attemptId: Long,
-  userId: Option[Long],
-  createdAt: OffsetDateTime,
-  success: Boolean,
-  identifier: String,
-  ipAddress: String,
-  userAgent: Option[String],
-  failureReason: Option[String]
+    attemptId: Long,
+    userId: Option[Long],
+    createdAt: OffsetDateTime,
+    success: Boolean,
+    identifier: String,
+    ipAddress: String,
+    userAgent: Option[String],
+    failureReason: Option[String]
 )
 
 case class ApiKey(
-  keyId: Long,
-  userId: Long,
-  lastUsedAt: Option[OffsetDateTime],
-  expiresAt: Option[OffsetDateTime],
-  createdAt: OffsetDateTime,
-  revokedAt: Option[OffsetDateTime],
-  rateLimitRpm: Int,
-  isActive: Boolean,
-  keyPrefix: String,
-  name: String,
-  scopes: List[String],
-  metadata: Json
+    keyId: Long,
+    userId: Long,
+    lastUsedAt: Option[OffsetDateTime],
+    expiresAt: Option[OffsetDateTime],
+    createdAt: OffsetDateTime,
+    revokedAt: Option[OffsetDateTime],
+    rateLimitRpm: Int,
+    isActive: Boolean,
+    keyPrefix: String,
+    name: String,
+    scopes: List[String],
+    metadata: Json
 )
 
 case class MfaMethod(
-  mfaId: Long,
-  userId: Long,
-  lastUsedAt: Option[OffsetDateTime],
-  createdAt: OffsetDateTime,
-  methodTypeId: MfaMethodTypeId,
-  isPrimary: Boolean,
-  isVerified: Boolean,
-  phoneNumber: Option[String],
-  metadata: Json
+    mfaId: Long,
+    userId: Long,
+    lastUsedAt: Option[OffsetDateTime],
+    createdAt: OffsetDateTime,
+    methodTypeId: MfaMethodTypeId,
+    isPrimary: Boolean,
+    isVerified: Boolean,
+    phoneNumber: Option[String],
+    metadata: Json
 )
 
 // ── RBAC domain models ───────────────────────────────────────────────
 
 case class Role(
-  roleId: RoleId,
-  isSystem: Boolean,
-  roleName: String,
-  description: Option[String],
-  createdAt: OffsetDateTime
+    roleId: RoleId,
+    isSystem: Boolean,
+    roleName: String,
+    description: Option[String],
+    createdAt: OffsetDateTime
 )
 
 case class Permission(
-  permissionId: PermissionId,
-  resource: String,
-  action: String,
-  description: Option[String]
+    permissionId: PermissionId,
+    resource: String,
+    action: String,
+    description: Option[String]
 )
 
 case class UserRole(
-  userId: Long,
-  roleId: RoleId,
-  grantedBy: Option[Long],
-  grantedAt: OffsetDateTime,
-  expiresAt: Option[OffsetDateTime]
+    userId: Long,
+    roleId: RoleId,
+    grantedBy: Option[Long],
+    grantedAt: OffsetDateTime,
+    expiresAt: Option[OffsetDateTime]
 )
 
 // ── KYC domain models ────────────────────────────────────────────────
 
 case class KycDocument(
-  documentId: Long,
-  userId: Long,
-  reviewedBy: Option[Long],
-  reviewedAt: Option[OffsetDateTime],
-  expiresAt: Option[OffsetDateTime],
-  createdAt: OffsetDateTime,
-  statusId: KycStatusId,
-  documentType: String,
-  fileReference: String,
-  rejectionReason: Option[String],
-  metadata: Json
+    documentId: Long,
+    userId: Long,
+    reviewedBy: Option[Long],
+    reviewedAt: Option[OffsetDateTime],
+    expiresAt: Option[OffsetDateTime],
+    createdAt: OffsetDateTime,
+    statusId: KycStatusId,
+    documentType: String,
+    fileReference: String,
+    rejectionReason: Option[String],
+    metadata: Json
 )
 
 // ── Notification domain models ───────────────────────────────────────
 
 case class NotificationTemplate(
-  templateId: Long,
-  createdAt: OffsetDateTime,
-  channelId: NotificationChannelId,
-  isActive: Boolean,
-  code: String,
-  subjectTemplate: Option[String],
-  bodyTemplate: String,
-  metadata: Json
+    templateId: Long,
+    createdAt: OffsetDateTime,
+    channelId: NotificationChannelId,
+    isActive: Boolean,
+    code: String,
+    subjectTemplate: Option[String],
+    bodyTemplate: String,
+    metadata: Json
 )
 
 case class NotificationPreference(
-  userId: Long,
-  channelId: NotificationChannelId,
-  isEnabled: Boolean,
-  eventType: String
+    userId: Long,
+    channelId: NotificationChannelId,
+    isEnabled: Boolean,
+    eventType: String
 )

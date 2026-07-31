@@ -16,12 +16,12 @@ import skunk.implicits.*
 trait SessionRepo[F[_]] {
 
   def createSession(
-    userId: Long,
-    tokenHash: Array[Byte],
-    ipAddress: String,
-    userAgent: Option[String],
-    deviceFingerprint: Option[String],
-    ttlHours: Int
+      userId: Long,
+      tokenHash: Array[Byte],
+      ipAddress: String,
+      userAgent: Option[String],
+      deviceFingerprint: Option[String],
+      ttlHours: Int
   ): F[Long]
 
   def revokeSession(sessionId: Long, reasonId: SessionRevokeReasonId): F[Unit]
@@ -43,8 +43,8 @@ object SessionRepo {
       Long *: Array[Byte] *: String *: Option[String] *: Option[String] *: Int *: EmptyTuple,
       Long
     ] =
-      sql"""SELECT auth.create_session($int8, $bytea, $text::inet, ${text.opt}, ${text
-          .opt}, $int4)""".query(int8)
+      sql"""SELECT auth.create_session($int8, $bytea, $text::inet, ${text.opt}, ${text.opt}, $int4)"""
+        .query(int8)
 
     val revokeSession: Command[Short *: Long *: EmptyTuple] =
       sql"""
@@ -72,7 +72,7 @@ object SessionRepo {
   }
 
   def fromSession[F[_]: Temporal: Tracer](s: Session[F])(using
-    Meter[F]
+      Meter[F]
   ): F[SessionRepo[F]] =
     for {
       m           <- Instrumented.makeMetrics[F]("repo.session")
@@ -85,12 +85,12 @@ object SessionRepo {
     } yield new SessionRepo[F] {
 
       def createSession(
-        userId: Long,
-        tokenHash: Array[Byte],
-        ipAddress: String,
-        userAgent: Option[String],
-        deviceFingerprint: Option[String],
-        ttlHours: Int
+          userId: Long,
+          tokenHash: Array[Byte],
+          ipAddress: String,
+          userAgent: Option[String],
+          deviceFingerprint: Option[String],
+          ttlHours: Int
       ): F[Long] =
         Instrumented.trace("SessionRepo.createSession", m, Attribute("user.id", userId))(
           pCreate.unique((userId, tokenHash, ipAddress, userAgent, deviceFingerprint, ttlHours))

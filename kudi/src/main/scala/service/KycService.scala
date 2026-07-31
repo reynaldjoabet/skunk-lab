@@ -14,17 +14,17 @@ import skunk.Session
 trait KycService[F[_]] {
 
   def submitDocument(
-    userId: Long,
-    documentType: String,
-    fileReference: String,
-    fileHash: Array[Byte]
+      userId: Long,
+      documentType: String,
+      fileReference: String,
+      fileHash: Array[Byte]
   ): F[KycDocument]
 
   def reviewDocument(
-    documentId: Long,
-    reviewerId: Long,
-    approved: Boolean,
-    rejectionReason: Option[String]
+      documentId: Long,
+      reviewerId: Long,
+      approved: Boolean,
+      rejectionReason: Option[String]
   ): F[Unit]
 
   def getUserDocuments(userId: Long): F[List[KycDocument]]
@@ -35,7 +35,7 @@ trait KycService[F[_]] {
 object KycService {
 
   def fromSession[F[_]: Temporal: Tracer](s: Session[F])(using
-    Meter[F]
+      Meter[F]
   ): F[KycService[F]] =
     for {
       m     <- Instrumented.makeMetrics[F]("service.kyc")
@@ -45,10 +45,10 @@ object KycService {
     } yield new KycService[F] {
 
       def submitDocument(
-        userId: Long,
-        documentType: String,
-        fileReference: String,
-        fileHash: Array[Byte]
+          userId: Long,
+          documentType: String,
+          fileReference: String,
+          fileHash: Array[Byte]
       ): F[KycDocument] =
         Instrumented.trace("KycService.submitDocument", m, Attribute("user.id", userId))(
           for {
@@ -67,10 +67,10 @@ object KycService {
         )
 
       def reviewDocument(
-        documentId: Long,
-        reviewerId: Long,
-        approved: Boolean,
-        rejectionReason: Option[String]
+          documentId: Long,
+          reviewerId: Long,
+          approved: Boolean,
+          rejectionReason: Option[String]
       ): F[Unit] =
         Instrumented.trace("KycService.reviewDocument", m, Attribute("document.id", documentId))(
           for {

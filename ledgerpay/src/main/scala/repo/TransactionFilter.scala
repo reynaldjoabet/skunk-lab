@@ -15,16 +15,16 @@ import skunk.codec.all._
 import skunk.implicits._
 
 case class TransactionFilter(
-  accountId: Option[UUID] = None,
-  txType: Option[TxType] = None,
-  status: Option[TxStatus] = None,
-  currency: Option[CurrencyCode] = None,
-  minAmount: Option[BigDecimal] = None,
-  maxAmount: Option[BigDecimal] = None,
-  after: Option[OffsetDateTime] = None,
-  before: Option[OffsetDateTime] = None,
-  limit: Int = 50,
-  offset: Int = 0
+    accountId: Option[UUID] = None,
+    txType: Option[TxType] = None,
+    status: Option[TxStatus] = None,
+    currency: Option[CurrencyCode] = None,
+    minAmount: Option[BigDecimal] = None,
+    maxAmount: Option[BigDecimal] = None,
+    after: Option[OffsetDateTime] = None,
+    before: Option[OffsetDateTime] = None,
+    limit: Int = 50,
+    offset: Int = 0
 )
 
 trait TransactionSearchRepo[F[_]] {

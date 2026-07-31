@@ -16,23 +16,23 @@ import skunk.codec.all._
 import skunk.implicits._
 
 case class AuditEntry(
-  id: Long,
-  entityType: String,
-  entityId: UUID,
-  action: String,
-  actorId: Option[UUID],
-  payload: Option[Json],
-  createdAt: OffsetDateTime
+    id: Long,
+    entityType: String,
+    entityId: UUID,
+    action: String,
+    actorId: Option[UUID],
+    payload: Option[Json],
+    createdAt: OffsetDateTime
 )
 
 trait AuditRepo[F[_]] {
 
   def log(
-    entityType: String,
-    entityId: UUID,
-    action: String,
-    actorId: Option[UUID],
-    payload: Option[Json]
+      entityType: String,
+      entityId: UUID,
+      action: String,
+      actorId: Option[UUID],
+      payload: Option[Json]
   ): F[Unit]
 
   def findByEntity(entityType: String, entityId: UUID): Stream[F, AuditEntry]
@@ -67,11 +67,11 @@ object AuditRepo {
       new AuditRepo[F] {
 
         def log(
-          entityType: String,
-          entityId: UUID,
-          action: String,
-          actorId: Option[UUID],
-          payload: Option[Json]
+            entityType: String,
+            entityId: UUID,
+            action: String,
+            actorId: Option[UUID],
+            payload: Option[Json]
         ): F[Unit] =
           pInsert.execute((entityType, entityId, action, actorId, payload)).void
 

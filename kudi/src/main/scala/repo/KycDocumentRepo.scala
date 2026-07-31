@@ -18,17 +18,17 @@ import skunk.implicits.*
 trait KycDocumentRepo[F[_]] {
 
   def create(
-    userId: Long,
-    documentType: String,
-    fileReference: String,
-    fileHash: Array[Byte]
+      userId: Long,
+      documentType: String,
+      fileReference: String,
+      fileHash: Array[Byte]
   ): F[KycDocument]
 
   def review(
-    documentId: Long,
-    reviewerId: Long,
-    approved: Boolean,
-    rejectionReason: Option[String]
+      documentId: Long,
+      reviewerId: Long,
+      approved: Boolean,
+      rejectionReason: Option[String]
   ): F[Unit]
 
   def findByUser(userId: Long): F[List[KycDocument]]
@@ -86,7 +86,7 @@ object KycDocumentRepo {
   }
 
   def fromSession[F[_]: Temporal: Tracer](s: Session[F])(using
-    Meter[F]
+      Meter[F]
   ): F[KycDocumentRepo[F]] =
     for {
       m        <- Instrumented.makeMetrics[F]("repo.kyc_document")
@@ -99,20 +99,20 @@ object KycDocumentRepo {
     } yield new KycDocumentRepo[F] {
 
       def create(
-        userId: Long,
-        documentType: String,
-        fileReference: String,
-        fileHash: Array[Byte]
+          userId: Long,
+          documentType: String,
+          fileReference: String,
+          fileHash: Array[Byte]
       ): F[KycDocument] =
         Instrumented.trace("KycDocumentRepo.create", m, Attribute("user.id", userId))(
           pInsert.unique((userId, documentType, fileReference, fileHash))
         )
 
       def review(
-        documentId: Long,
-        reviewerId: Long,
-        approved: Boolean,
-        rejectionReason: Option[String]
+          documentId: Long,
+          reviewerId: Long,
+          approved: Boolean,
+          rejectionReason: Option[String]
       ): F[Unit] =
         Instrumented.trace("KycDocumentRepo.review", m, Attribute("document.id", documentId))(
           if (approved) pApprove.execute((reviewerId, documentId)).void

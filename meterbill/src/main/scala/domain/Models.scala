@@ -61,71 +61,71 @@ object SubStatus {
 // ─── Models ───
 
 case class Tenant(
-  id: UUID,
-  slug: String,
-  name: String,
-  email: String,
-  metadata: Json,
-  createdAt: OffsetDateTime
+    id: UUID,
+    slug: String,
+    name: String,
+    email: String,
+    metadata: Json,
+    createdAt: OffsetDateTime
 )
 
 case class Plan(
-  id: UUID,
-  name: String,
-  tier: PlanTier,
-  period: BillingPeriod,
-  basePriceCents: Long,
-  includedUnits: Long,
-  overageRateCents: Long,
-  active: Boolean,
-  createdAt: OffsetDateTime
+    id: UUID,
+    name: String,
+    tier: PlanTier,
+    period: BillingPeriod,
+    basePriceCents: Long,
+    includedUnits: Long,
+    overageRateCents: Long,
+    active: Boolean,
+    createdAt: OffsetDateTime
 )
 
 case class Subscription(
-  id: UUID,
-  tenantId: UUID,
-  planId: UUID,
-  status: SubStatus,
-  startsAt: OffsetDateTime,
-  currentPeriodStart: OffsetDateTime,
-  currentPeriodEnd: OffsetDateTime,
-  canceledAt: Option[OffsetDateTime],
-  createdAt: OffsetDateTime
+    id: UUID,
+    tenantId: UUID,
+    planId: UUID,
+    status: SubStatus,
+    startsAt: OffsetDateTime,
+    currentPeriodStart: OffsetDateTime,
+    currentPeriodEnd: OffsetDateTime,
+    canceledAt: Option[OffsetDateTime],
+    createdAt: OffsetDateTime
 )
 
 case class UsageEvent(
-  id: UUID,
-  tenantId: UUID,
-  subscriptionId: UUID,
-  metric: String,
-  quantity: Long,
-  idempotencyKey: String,
-  recordedAt: OffsetDateTime
+    id: UUID,
+    tenantId: UUID,
+    subscriptionId: UUID,
+    metric: String,
+    quantity: Long,
+    idempotencyKey: String,
+    recordedAt: OffsetDateTime
 )
 
 case class Invoice(
-  id: UUID,
-  tenantId: UUID,
-  subscriptionId: UUID,
-  periodStart: OffsetDateTime,
-  periodEnd: OffsetDateTime,
-  baseAmount: Long,
-  overageUnits: Long,
-  overageAmount: Long,
-  totalAmount: Long,
-  status: InvoiceStatus,
-  issuedAt: Option[OffsetDateTime],
-  paidAt: Option[OffsetDateTime],
-  createdAt: OffsetDateTime
+    id: UUID,
+    tenantId: UUID,
+    subscriptionId: UUID,
+    periodStart: OffsetDateTime,
+    periodEnd: OffsetDateTime,
+    baseAmount: Long,
+    overageUnits: Long,
+    overageAmount: Long,
+    totalAmount: Long,
+    status: InvoiceStatus,
+    issuedAt: Option[OffsetDateTime],
+    paidAt: Option[OffsetDateTime],
+    createdAt: OffsetDateTime
 )
 
 case class LineItem(
-  id: UUID,
-  invoiceId: UUID,
-  description: String,
-  quantity: Long,
-  unitPriceCents: Long,
-  amountCents: Long
+    id: UUID,
+    invoiceId: UUID,
+    description: String,
+    quantity: Long,
+    unitPriceCents: Long,
+    amountCents: Long
 )
 
 // ─── Request DTOs ───
@@ -136,9 +136,9 @@ case class RecordUsageReq(idempotencyKey: String, metric: String, quantity: Long
 case class RecordUsageBatchReq(events: List[RecordUsageReq])
 
 case class GenerateInvoiceReq(
-  subscriptionId: UUID,
-  periodStart: OffsetDateTime,
-  periodEnd: OffsetDateTime
+    subscriptionId: UUID,
+    periodStart: OffsetDateTime,
+    periodEnd: OffsetDateTime
 )
 
 // ─── Response DTOs ───
@@ -146,16 +146,16 @@ case class GenerateInvoiceReq(
 case class UsageSummary(metric: String, totalQuantity: Long)
 
 case class InvoicePreview(
-  baseAmount: Long,
-  overageUnits: Long,
-  overageAmount: Long,
-  totalAmount: Long,
-  lineItems: List[LineItemPreview]
+    baseAmount: Long,
+    overageUnits: Long,
+    overageAmount: Long,
+    totalAmount: Long,
+    lineItems: List[LineItemPreview]
 )
 
 case class LineItemPreview(
-  description: String,
-  quantity: Long,
-  unitPriceCents: Long,
-  amountCents: Long
+    description: String,
+    quantity: Long,
+    unitPriceCents: Long,
+    amountCents: Long
 )

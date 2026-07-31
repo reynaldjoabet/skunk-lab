@@ -14,7 +14,7 @@ import skunk._
 object Database {
 
   def pool[F[_]: Temporal: Tracer: Meter: Console: Network](
-    cfg: DbConfig
+      cfg: DbConfig
   ): Resource[F, Resource[F, Session[F]]] =
     Session
       .Builder[F]

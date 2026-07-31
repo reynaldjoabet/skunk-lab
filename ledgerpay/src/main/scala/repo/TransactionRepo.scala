@@ -61,8 +61,7 @@ object TransactionRepo {
         .contramap[UUID](id => (id, id))
 
     val complete: Command[UUID] =
-      sql"UPDATE transactions SET status = 'completed', completed_at = now() WHERE id = $uuid"
-        .command
+      sql"UPDATE transactions SET status = 'completed', completed_at = now() WHERE id = $uuid".command
 
     val fail: Command[UUID] =
       sql"UPDATE transactions SET status = 'failed' WHERE id = $uuid".command

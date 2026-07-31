@@ -23,7 +23,7 @@ trait TransferService[F[_]] {
 object TransferService {
 
   def fromSession[F[_]: Temporal: Tracer](s: Session[F])(using
-    m: Meter[F]
+      m: Meter[F]
   ): F[TransferService[F]] =
     for {
       met      <- Instrumented.makeMetrics[F]("service.transfer")

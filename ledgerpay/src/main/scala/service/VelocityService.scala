@@ -41,8 +41,8 @@ object VelocityService {
       new VelocityService[F] {
 
         def checkDailyLimit(
-          accountId: UUID,
-          additionalAmount: BigDecimal
+            accountId: UUID,
+            additionalAmount: BigDecimal
         ): F[Either[String, Unit]] =
           for {
             kyc   <- pKyc.unique(accountId)

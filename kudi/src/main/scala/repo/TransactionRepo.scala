@@ -16,16 +16,16 @@ import skunk.implicits.*
 trait TransactionRepo[F[_]] {
 
   def create(
-    sourceWalletId: Option[Long],
-    destWalletId: Option[Long],
-    amount: BigDecimal,
-    feeAmount: BigDecimal,
-    txnTypeId: TxnTypeId,
-    sourceCurrency: Option[String],
-    destCurrency: Option[String],
-    referenceId: String,
-    description: Option[String],
-    ipAddress: Option[String]
+      sourceWalletId: Option[Long],
+      destWalletId: Option[Long],
+      amount: BigDecimal,
+      feeAmount: BigDecimal,
+      txnTypeId: TxnTypeId,
+      sourceCurrency: Option[String],
+      destCurrency: Option[String],
+      referenceId: String,
+      description: Option[String],
+      ipAddress: Option[String]
   ): F[Transaction]
 
   def complete(txnId: Long, createdAt: java.time.OffsetDateTime): F[Unit]
@@ -87,7 +87,7 @@ object TransactionRepo {
   }
 
   def fromSession[F[_]: Temporal: Tracer](s: Session[F])(using
-    Meter[F]
+      Meter[F]
   ): F[TransactionRepo[F]] =
     for {
       m             <- Instrumented.makeMetrics[F]("repo.transaction")
@@ -99,16 +99,16 @@ object TransactionRepo {
     } yield new TransactionRepo[F] {
 
       def create(
-        sourceWalletId: Option[Long],
-        destWalletId: Option[Long],
-        amount: BigDecimal,
-        feeAmount: BigDecimal,
-        txnTypeId: TxnTypeId,
-        sourceCurrency: Option[String],
-        destCurrency: Option[String],
-        referenceId: String,
-        description: Option[String],
-        ipAddress: Option[String]
+          sourceWalletId: Option[Long],
+          destWalletId: Option[Long],
+          amount: BigDecimal,
+          feeAmount: BigDecimal,
+          txnTypeId: TxnTypeId,
+          sourceCurrency: Option[String],
+          destCurrency: Option[String],
+          referenceId: String,
+          description: Option[String],
+          ipAddress: Option[String]
       ): F[Transaction] =
         Instrumented.trace("TransactionRepo.create", m, Attribute("txn.reference", referenceId))(
           pInsert.unique(
