@@ -3,7 +3,8 @@ import Dependencies.*
 ThisBuild / scalaVersion := "3.9.0"
 ThisBuild / version      := "0.1.0-SNAPSHOT"
 
-ThisBuild / crossScalaVersions := Seq("3.3.8", "3.9.0")
+// 3.3.8 LTS dropped: iron 3.4 (needed for skunk 2.x) is built with Scala 3.9.
+ThisBuild / crossScalaVersions := Seq("3.9.0")
 
 ThisBuild / scalacOptions := Seq(
   "-encoding",

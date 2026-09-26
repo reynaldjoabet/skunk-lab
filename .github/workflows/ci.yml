@@ -63,7 +63,8 @@ jobs:
       fail-fast: false
       matrix:
 
-        scala: ['3.3.8','3.9.0']
+        # 3.3.8 LTS dropped: iron 3.4 (needed for skunk 2.x) is built with Scala 3.9.
+        scala: ['3.9.0']
         java: ['21', '25']
 
         distribution: [temurin, corretto]

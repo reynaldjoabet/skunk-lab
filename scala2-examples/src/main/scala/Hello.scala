@@ -1,12 +1,15 @@
 import cats.effect._
 
-import org.typelevel.otel4s.metrics.Meter.Implicits.{noop => noopMeter}
-import org.typelevel.otel4s.trace.Tracer.Implicits.{noop => noopTracer} // (1)
+import org.typelevel.otel4s.metrics.MeterProvider
+import org.typelevel.otel4s.trace.TracerProvider // (1)
 import skunk._
 import skunk.codec.all._
 import skunk.implicits._
 
 object Hello extends IOApp {
+
+  implicit val tracerProvider: TracerProvider[IO] = TracerProvider.noop
+  implicit val meterProvider: MeterProvider[IO]   = MeterProvider.noop
 
 // Command->SQL and parameter encoder for a statement that returns no rows
   val commad: Command[Short *: String *: EmptyTuple] =

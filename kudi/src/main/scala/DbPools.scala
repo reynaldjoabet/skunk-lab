@@ -11,9 +11,11 @@ import fs2.io.net.Network
 import org.typelevel.otel4s.metrics.Counter
 import org.typelevel.otel4s.metrics.Histogram
 import org.typelevel.otel4s.metrics.Meter
+import org.typelevel.otel4s.metrics.MeterProvider
 import org.typelevel.otel4s.metrics.UpDownCounter
 import org.typelevel.otel4s.trace.StatusCode
 import org.typelevel.otel4s.trace.Tracer
+import org.typelevel.otel4s.trace.TracerProvider
 import org.typelevel.otel4s.Attribute
 import skunk.*
 
@@ -130,7 +132,7 @@ case class DbPools[F[_]](
 
 object DbPools {
 
-  def make[F[_]: Temporal: Tracer: Meter: Console: Network](
+  def make[F[_]: Temporal: Tracer: Meter: TracerProvider: MeterProvider: Console: Network](
       cfg: AppConfig
   ): Resource[F, DbPools[F]] = {
     val db  = cfg.db

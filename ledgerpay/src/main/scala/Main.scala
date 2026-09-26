@@ -6,8 +6,10 @@ import cats.syntax.all._
 import ledgerpay.db.Database
 import ledgerpay.service._
 import org.typelevel.otel4s.metrics.Meter
+import org.typelevel.otel4s.metrics.MeterProvider
 import org.typelevel.otel4s.oteljava.OtelJava
 import org.typelevel.otel4s.trace.Tracer
+import org.typelevel.otel4s.trace.TracerProvider
 
 object Main extends IOApp {
 
@@ -18,11 +20,13 @@ object Main extends IOApp {
         (
           otel.tracerProvider.tracer("ledgerpay").get,
           otel.meterProvider.meter("ledgerpay").get
-        ).tupled
+        ).tupled.map((otel, _))
       }
-      .use { case (tracer, meter) =>
-        implicit val T: Tracer[IO] = tracer
-        implicit val M: Meter[IO]  = meter
+      .use { case (otel, (tracer, meter)) =>
+        implicit val TP: TracerProvider[IO] = otel.tracerProvider
+        implicit val MP: MeterProvider[IO]  = otel.meterProvider
+        implicit val T: Tracer[IO]          = tracer
+        implicit val M: Meter[IO]           = meter
 
         Database
           .pool[IO](

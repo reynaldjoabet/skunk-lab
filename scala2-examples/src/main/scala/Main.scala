@@ -8,8 +8,8 @@ import cats.effect.kernel.Temporal
 import cats.effect.IO
 import cats.effect.Resource
 
-import org.typelevel.otel4s.metrics.Meter.Implicits.{noop => noopMeter}
-import org.typelevel.otel4s.trace.Tracer.Implicits.{noop => noopTracer}
+import org.typelevel.otel4s.metrics.MeterProvider
+import org.typelevel.otel4s.trace.TracerProvider
 import skunk.~
 import skunk.codec.AllCodecs
 import skunk.data.Notification
@@ -41,6 +41,9 @@ import skunk.Void
 //Session represents a connection to a Postgres database.
 //Skunk currently supports the trust (no password necessary), password, md5 and scram-sha-256 authentication methods.
 object Main extends App {
+
+  implicit val tracerProvider: TracerProvider[IO] = TracerProvider.noop
+  implicit val meterProvider: MeterProvider[IO]   = MeterProvider.noop
 
   val skunkConnectionPool: Resource[IO, Resource[IO, Session[IO]]] = Session.pooled[IO](
     host = "localhost",

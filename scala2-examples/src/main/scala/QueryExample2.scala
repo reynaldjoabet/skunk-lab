@@ -5,8 +5,8 @@ import cats.syntax.all._
 import cats.Applicative
 import fs2.Stream
 
-import org.typelevel.otel4s.metrics.Meter.Implicits.{noop => noopMeter}
-import org.typelevel.otel4s.trace.Tracer.Implicits.{noop => noopTracer}
+import org.typelevel.otel4s.metrics.MeterProvider
+import org.typelevel.otel4s.trace.TracerProvider
 import skunk._
 import skunk.codec.all._
 import skunk.implicits._
@@ -52,6 +52,9 @@ object Service {
 }
 
 object QueryExample2 extends IOApp {
+
+  implicit val tracerProvider: TracerProvider[IO] = TracerProvider.noop
+  implicit val meterProvider: MeterProvider[IO]   = MeterProvider.noop
 
   // a source of sessions
   val session: Resource[IO, Session[IO]] =

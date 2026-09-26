@@ -6,11 +6,11 @@ object Dependencies {
 
     val http4s     = "0.23.37"
     val circe      = "0.14.16"
-    val skunk      = "1.1.0-RC1"
-    val otel4s     = "0.16.0"
+    val skunk      = "2.0.0-RC3"
+    val otel4s     = "1.1.0"
     val otelJava   = "1.66.0" // OpenTelemetry Java SDK runtime exporters
     val tapir      = "1.13.31"
-    val iron       = "3.3.2"
+    val iron       = "3.4.0-RC1"
     val pureconfig = "0.17.10"
     val jsoniter   = "2.40.1"
 

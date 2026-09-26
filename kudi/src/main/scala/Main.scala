@@ -9,8 +9,10 @@ import fs2.io.net.Network
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import org.typelevel.log4cats.Logger
 import org.typelevel.otel4s.metrics.Meter
+import org.typelevel.otel4s.metrics.MeterProvider
 import org.typelevel.otel4s.oteljava.OtelJava
 import org.typelevel.otel4s.trace.Tracer
+import org.typelevel.otel4s.trace.TracerProvider
 
 object Main extends IOApp {
 
@@ -47,11 +49,14 @@ object Main extends IOApp {
       .autoConfigured[IO]()
       .evalMap { otel =>
         (otel.tracerProvider.tracer("kudi").get, otel.meterProvider.meter("kudi").get).tupled
+          .map((otel, _))
       }
-      .use { case (tracer, meter) =>
-        given Tracer[IO] = tracer
-        given Meter[IO]  = meter
-        given Logger[IO] = Slf4jLogger.getLogger[IO]
+      .use { case (otel, (tracer, meter)) =>
+        given TracerProvider[IO] = otel.tracerProvider
+        given MeterProvider[IO]  = otel.meterProvider
+        given Tracer[IO]         = tracer
+        given Meter[IO]          = meter
+        given Logger[IO]         = Slf4jLogger.getLogger[IO]
 
         val app = for {
           pools <- DbPools.make[IO](config)

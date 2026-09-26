@@ -8,12 +8,14 @@ import fs2.io.net.Network
 
 import meterbill.config.DbConfig
 import org.typelevel.otel4s.metrics.Meter
+import org.typelevel.otel4s.metrics.MeterProvider
 import org.typelevel.otel4s.trace.Tracer
+import org.typelevel.otel4s.trace.TracerProvider
 import skunk._
 
 object Database {
 
-  def pool[F[_]: Temporal: Tracer: Meter: Console: Network](
+  def pool[F[_]: Temporal: Tracer: Meter: TracerProvider: MeterProvider: Console: Network](
       cfg: DbConfig
   ): Resource[F, Resource[F, Session[F]]] =
     Session

@@ -7,12 +7,14 @@ import cats.effect.std.Console
 import fs2.io.net.Network
 
 import org.typelevel.otel4s.metrics.Meter
+import org.typelevel.otel4s.metrics.MeterProvider
 import org.typelevel.otel4s.trace.Tracer
+import org.typelevel.otel4s.trace.TracerProvider
 import skunk._
 
 object Database {
 
-  def pool[F[_]: Temporal: Tracer: Meter: Console: Network](
+  def pool[F[_]: Temporal: Tracer: Meter: TracerProvider: MeterProvider: Console: Network](
       host: String,
       port: Int,
       user: String,
