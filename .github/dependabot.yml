@@ -24,27 +24,3 @@ updates:
       sbt-security:
         applies-to: security-updates
         patterns: ["*"]
-
-  - package-ecosystem: github-actions
-    directory: /
-    schedule:
-      interval: weekly
-      day: monday
-      time: "04:00"
-      timezone: Etc/UTC
-    open-pull-requests-limit: 1
-    labels:
-      - dependencies
-    commit-message:
-      prefix: ci
-    groups:
-      actions-all:
-        applies-to: version-updates
-        patterns: ["*"]
-        update-types:
-          - major
-          - minor
-          - patch
-      actions-security:
-        applies-to: security-updates
-        patterns: ["*"]
