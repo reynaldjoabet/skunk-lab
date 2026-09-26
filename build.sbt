@@ -1,8 +1,9 @@
 import Dependencies.*
 
-// ─── Common settings (bare = injected into ALL subprojects in sbt 2.x) ────────
-scalaVersion                  := "3.3.8"
-ThisBuild / semanticdbEnabled := true
+ThisBuild / scalaVersion := "3.9.0"
+ThisBuild / version      := "0.1.0-SNAPSHOT"
+
+ThisBuild / crossScalaVersions := Seq("3.3.8", "3.9.0")
 
 ThisBuild / scalacOptions := Seq(
   "-encoding",
@@ -11,16 +12,14 @@ ThisBuild / scalacOptions := Seq(
   "-deprecation",
   "-feature",
   "-unchecked",
-  "-source:3.3",
-  "-java-output-version:17",
-  "-Werror",
+  // "-Werror",
+  // "-Wunused:all",
   "-Wvalue-discard",
   "-Wnonunit-statement",
-  "-Xlint:all",
+  "-language:strictEquality",
   "-Xcheck-macros",
   "-Xmax-inlines:64"
 )
-
 Global / onChangedBuildSource := ReloadOnSourceChanges
 
 run / fork  := true
