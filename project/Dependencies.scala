@@ -10,7 +10,7 @@ object Dependencies {
     val otel4s     = "1.1.0"
     val otelJava   = "1.66.0" // OpenTelemetry Java SDK runtime exporters
     val tapir      = "1.13.31"
-    val iron       = "3.4.0-RC1"
+    val iron       = "3.4.0-RC2"
     val pureconfig = "0.17.10"
     val jsoniter   = "2.40.1"
 
