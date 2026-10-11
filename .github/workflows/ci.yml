@@ -5,8 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-  # Nightly run catches breakage from outside the repo - upstream releases,
-  # runner image changes - on days with no commits. Drop if not wanted.
+
   schedule:
     - cron: '0 3 * * *'
   workflow_dispatch:
@@ -52,19 +51,15 @@ jobs:
         run: sbt -v "scalafmtSbtCheck; scalafmtCheckAll"
 
   build:
-    name: Scala ${{ matrix.scala }} / Java ${{ matrix.java }} (${{ matrix.distribution }})
-    # Gate on formatting so a misformatted PR fails in one cheap job rather
-    # than burning every matrix leg.
+    name: Java ${{ matrix.java }} (${{ matrix.distribution }})
+
     needs: lint
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
 
     strategy:
       fail-fast: false
       matrix:
-
-        # 3.3.8 LTS dropped: iron 3.4 (needed for skunk 2.x) is built with Scala 3.9.
-        scala: ['3.9.0']
         java: ['21', '25']
 
         distribution: [temurin, corretto]
@@ -90,4 +85,4 @@ jobs:
         uses: sbt/setup-sbt@v1
 
       - name: Compile and test
-        run: sbt -v "++${{ matrix.scala }}" "Test/compile; test"
+        run: sbt -v "Test/compile; test"
