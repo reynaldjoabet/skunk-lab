@@ -19,7 +19,8 @@ object AppConfig {
       host = sys.env.getOrElse("DB_HOST", "localhost"),
       port = sys.env.getOrElse("DB_PORT", "5432").toInt,
       user = sys.env.getOrElse("DB_USER", "meterbill"),
-      password = sys.env.getOrElse("DB_PASSWORD", "meterbill_secret"),
+      // No default: refuse to start without a password.
+      password = sys.env.getOrElse("DB_PASSWORD", sys.error("DB_PASSWORD must be set")),
       database = sys.env.getOrElse("DB_NAME", "meterbill"),
       poolSize = sys.env.getOrElse("DB_POOL_SIZE", "10").toInt
     ),

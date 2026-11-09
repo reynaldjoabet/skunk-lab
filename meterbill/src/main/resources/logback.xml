@@ -1,0 +1,20 @@
+<configuration>
+  <!-- Plain-text lines on stdout; systemd/k8s collect them. -->
+  <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <pattern>%d{ISO8601} %-5level [%thread] %logger{36} - %msg%n</pattern>
+    </encoder>
+  </appender>
+
+  <!-- Async so slow stdout never blocks request threads; drops lines rather
+       than blocking if the queue ever fills. -->
+  <appender name="ASYNC" class="ch.qos.logback.classic.AsyncAppender">
+    <appender-ref ref="STDOUT"/>
+    <neverBlock>true</neverBlock>
+  </appender>
+
+  <!-- LOG_LEVEL env var overrides the level without a rebuild. -->
+  <root level="${LOG_LEVEL:-INFO}">
+    <appender-ref ref="ASYNC"/>
+  </root>
+</configuration>

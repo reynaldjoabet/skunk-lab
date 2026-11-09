@@ -10,7 +10,18 @@ import org.typelevel.otel4s.metrics.Meter
 import org.typelevel.otel4s.metrics.MeterProvider
 import org.typelevel.otel4s.trace.Tracer
 import org.typelevel.otel4s.trace.TracerProvider
+import pureconfig.ConfigReader
 import skunk._
+
+// The `ledgerpay.db` block of application.conf (other keys there are not yet wired).
+final case class DbConfig(
+    host: String,
+    port: Int,
+    user: String,
+    password: String,
+    database: String,
+    maxConnections: Int
+) derives ConfigReader
 
 object Database {
 

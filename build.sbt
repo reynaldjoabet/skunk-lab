@@ -53,15 +53,36 @@ lazy val common = Seq(
   ironSkunk,
   ironPureconfig,
   ironJsoniter,
-  ironScalacheck
+  ironScalacheck,
+  pureconfig,
+  pureconfigGeneric,
+  logback
 )
 
-// Settings applied to runnable services: propagate javaOptions into the
-// packaged Universal stage so `bin/<app>` scripts pick them up at runtime.
+// Settings applied to runnable services, for both packaging formats:
+// `<svc>/Universal/stage` (bin/<svc> start script) and `<svc>/assembly`
+// (single runnable jar, used by deploy/hetzner.sh).
+//
+// The dev `javaOptions` above (Honeycomb endpoint etc.) are deliberately NOT
+// copied into the start script: -D flags take precedence over OTEL_* env
+// vars, so baking them in would make the exporter unconfigurable at deploy
+// time. Configure OpenTelemetry in production via OTEL_* env vars instead.
+//
 // Once sbt-javaagent ships an sbt 2.x build, uncomment the `javaAgents`
 // line below and re-enable `JavaAgent` on each project's `enablePlugins`.
 lazy val deploySettings = Seq(
-  Universal / javaOptions ++= javaOptions.value
+  Universal / javaOptions ++= Seq(
+    "-J-XX:MaxRAMPercentage=75",     // size the heap from the container/cgroup memory limit
+    "-J-XX:+ExitOnOutOfMemoryError", // fail fast so the supervisor restarts a broken JVM
+    "-Dotel.java.global-autoconfigure.enabled=true"
+  ),
+  assembly / assemblyJarName       := s"${name.value}.jar",
+  assembly / assemblyMergeStrategy := {
+    case PathList("module-info.class")                            => MergeStrategy.discard
+    case PathList("META-INF", "versions", _, "module-info.class") => MergeStrategy.discard
+    case PathList("META-INF", "versions", _, "OSGI-INF", _*)      => MergeStrategy.discard
+    case other                                                    => (assembly / assemblyMergeStrategy).value(other)
+  }
   // javaAgents += "io.github.irevive" % "otel4s-opentelemetry-javaagent" % "2.27.0" % Runtime
 )
 
@@ -69,6 +90,7 @@ lazy val ledgerpay = (project in file("ledgerpay"))
   .enablePlugins(JavaAppPackaging) // add JavaAgent once sbt-javaagent supports sbt 2.x
   .settings(
     name                 := "ledgerpay",
+    Compile / mainClass  := Some("ledgerpay.Main"),
     libraryDependencies ++= common
   )
   .settings(deploySettings *)
@@ -77,6 +99,7 @@ lazy val meterbill = (project in file("meterbill"))
   .enablePlugins(JavaAppPackaging) // add JavaAgent once sbt-javaagent supports sbt 2.x
   .settings(
     name                 := "meterbill",
+    Compile / mainClass  := Some("meterbill.Main"),
     libraryDependencies ++= common
   )
   .settings(deploySettings *)
@@ -85,6 +108,7 @@ lazy val kudi = (project in file("kudi"))
   .enablePlugins(JavaAppPackaging) // add JavaAgent once sbt-javaagent supports sbt 2.x
   .settings(
     name                 := "kudi",
+    Compile / mainClass  := Some("kudi.Main"),
     libraryDependencies ++= common ++ Seq(tapirCore, tapirServer, iron),
     // WIP metric-collector extractions that still need to be wired back into
     // DbMetricsCollector's scope (helpers like mkLongGauge / uniqueOne and the
@@ -103,6 +127,7 @@ lazy val `identity-management` = (project in file("identity-management"))
   .enablePlugins(JavaAppPackaging) // add JavaAgent once sbt-javaagent supports sbt 2.x
   .settings(
     name                 := "identity-management",
+    Compile / mainClass  := Some("idmgmt.Main"),
     libraryDependencies ++= common
   )
   .settings(deploySettings *)
@@ -111,8 +136,6 @@ lazy val `identity-management` = (project in file("identity-management"))
 lazy val root = rootProject.autoAggregate
   .settings(
     libraryDependencies ++= common ++ Seq(
-      pureconfig,
-      pureconfigGeneric,
       jsoniterCore,
       jsoniterMacros
     ),

@@ -10,8 +10,13 @@ import org.typelevel.otel4s.metrics.MeterProvider
 import org.typelevel.otel4s.oteljava.OtelJava
 import org.typelevel.otel4s.trace.Tracer
 import org.typelevel.otel4s.trace.TracerProvider
+import pureconfig.ConfigSource
 
 object Main extends IOApp {
+
+  // Fails fast with every missing or invalid key listed (e.g. DB_PASSWORD unset).
+  private val loadDbConfig: IO[db.DbConfig] =
+    IO.blocking(ConfigSource.default.at("ledgerpay.db").loadOrThrow[db.DbConfig])
 
   def run(args: List[String]): IO[ExitCode] =
     OtelJava
@@ -28,15 +33,18 @@ object Main extends IOApp {
         implicit val T: Tracer[IO]          = tracer
         implicit val M: Meter[IO]           = meter
 
-        Database
-          .pool[IO](
-            host = "localhost",
-            port = 5432,
-            user = "ledgerpay",
-            password = "s3cret",
-            database = "ledgerpay",
-            maxConns = 10
-          )
+        Resource
+          .eval(loadDbConfig)
+          .flatMap { cfg =>
+            Database.pool[IO](
+              host = cfg.host,
+              port = cfg.port,
+              user = cfg.user,
+              password = cfg.password,
+              database = cfg.database,
+              maxConns = cfg.maxConnections
+            )
+          }
           .use { pool =>
             // Construct services per-request using the pool
             // In a real app, wire these into http4s routes:

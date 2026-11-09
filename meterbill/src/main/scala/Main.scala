@@ -11,39 +11,53 @@ import org.http4s.ember.server.EmberServerBuilder
 import org.http4s.server.Router
 import org.typelevel.otel4s.metrics.Meter
 import org.typelevel.otel4s.metrics.MeterProvider
+import org.typelevel.otel4s.oteljava.OtelJava
 import org.typelevel.otel4s.trace.Tracer
 import org.typelevel.otel4s.trace.TracerProvider
 
 object Main extends IOApp.Simple {
 
-  implicit val tracer: Tracer[IO]                 = Tracer.noop
-  implicit val meter: Meter[IO]                   = Meter.noop
-  implicit val tracerProvider: TracerProvider[IO] = TracerProvider.noop
-  implicit val meterProvider: MeterProvider[IO]   = MeterProvider.noop
-
-  val run: IO[Unit] = {
-    val cfg = AppConfig.load
-    Database
-      .pool[IO](cfg.db)
-      .use { pool =>
-        val app = Router(
-          "/api" -> (
-            TenantRoutes.routes[IO](pool) <+>
-              UsageRoutes.routes[IO](pool) <+>
-              BillingRoutes.routes[IO](pool) <+>
-              HealthRoutes.routes[IO](pool)
-          )
-        ).orNotFound
-
-        EmberServerBuilder
-          .default[IO]
-          .withHost(Host.fromString(cfg.http.host).getOrElse(ipv4"0.0.0.0"))
-          .withPort(Port.fromInt(cfg.http.port).getOrElse(port"8080"))
-          .withHttpApp(app)
-          .build
-          .useForever
+  val run: IO[Unit] =
+    OtelJava
+      .autoConfigured[IO]()
+      .evalMap { otel =>
+        (
+          otel.tracerProvider.tracer("meterbill").get,
+          otel.meterProvider.meter("meterbill").get
+        ).tupled
+          .map((otel, _))
       }
-  }
+      .use { case (otel, (tracer, meter)) =>
+        implicit val TP: TracerProvider[IO] = otel.tracerProvider
+        implicit val MP: MeterProvider[IO]  = otel.meterProvider
+        implicit val T: Tracer[IO]          = tracer
+        implicit val M: Meter[IO]           = meter
+
+        // Inside IO so a bad/missing env var fails with a clear error rather
+        // than an ExceptionInInitializerError from Main's constructor.
+        IO.delay(AppConfig.load).flatMap { cfg =>
+          Database
+            .pool[IO](cfg.db)
+            .use { pool =>
+              val app = Router(
+                "/api" -> (
+                  TenantRoutes.routes[IO](pool) <+>
+                    UsageRoutes.routes[IO](pool) <+>
+                    BillingRoutes.routes[IO](pool) <+>
+                    HealthRoutes.routes[IO](pool)
+                )
+              ).orNotFound
+
+              EmberServerBuilder
+                .default[IO]
+                .withHost(Host.fromString(cfg.http.host).getOrElse(ipv4"0.0.0.0"))
+                .withPort(Port.fromInt(cfg.http.port).getOrElse(port"8080"))
+                .withHttpApp(app)
+                .build
+                .useForever
+            }
+        }
+      }
 
   extension [A](res: => Resource[IO, A]) {
 

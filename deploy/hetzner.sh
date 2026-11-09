@@ -771,6 +771,18 @@ runcmd:
   sed -i 's/^  //' $APP_DIR/.env
   chmod 600 $APP_DIR/.env
 
+# --- Kudi service env (loaded by systemd EnvironmentFile; read by kudi's application.conf) ---
+- |
+  cat > $APP_DIR/kudi.env <<KUDIENV
+  DB_USER=kudi
+  DB_PASSWORD=$db_password
+  DB_NAME=kudi
+  # Postgres listens on 127.0.0.1 only, with ssl=off (see compose above).
+  DB_SSL=none
+  KUDIENV
+  sed -i 's/^  //' $APP_DIR/kudi.env
+  chmod 600 $APP_DIR/kudi.env
+
 # --- OTel Collector config ---
 - |
   cat > $APP_DIR/otel/otel-config.yaml <<'OTELCFG'
@@ -911,6 +923,7 @@ runcmd:
   User=kudi
   Group=kudi
   WorkingDirectory=/opt/kudi
+  EnvironmentFile=/opt/kudi/kudi.env
 
   ExecStart=/usr/bin/java \
     -Xms512m -Xmx1536m \
@@ -918,6 +931,7 @@ runcmd:
     -XX:MaxGCPauseMillis=100 \
     -XX:+UseStringDeduplication \
     -XX:+AlwaysPreTouch \
+    -XX:+ExitOnOutOfMemoryError \
     -Dotel.java.global-autoconfigure.enabled=true \
     -Dotel.service.name=kudi \
     -Dotel.exporter.otlp.endpoint=http://127.0.0.1:4317 \
@@ -1036,11 +1050,11 @@ deploy_jar() {
         command -v sbt &>/dev/null || fatal "sbt not found. Pass JAR path: --deploy /path/to/kudi.jar"
         (cd "$PROJECT_ROOT" && sbt --client "kudi/assembly") || fatal "JAR build failed."
 
-        jar_path=$(find "$PROJECT_ROOT/kudi/target" -name "*.jar" -path "*/assembly/*" 2>/dev/null | head -1)
-        if [[ -z "$jar_path" ]]; then
-            jar_path=$(find "$PROJECT_ROOT/kudi/target" -name "*.jar" 2>/dev/null | sort -t/ -k1 | tail -1)
-        fi
-        [[ -n "$jar_path" ]] || fatal "Could not find assembled JAR."
+        # sbt 2 writes outputs under the root target/out/; the name comes from
+        # `assembly / assemblyJarName` in build.sbt. No fallback: any other
+        # jar there is a thin jar without dependencies and would not start.
+        jar_path=$(find "$PROJECT_ROOT/target/out" -name "kudi.jar" -path "*/kudi/*" 2>/dev/null | sort | tail -1)
+        [[ -n "$jar_path" ]] || fatal "Could not find assembled JAR (target/out/**/kudi/kudi.jar)."
     fi
 
     [[ -f "$jar_path" ]] || fatal "JAR not found: $jar_path"

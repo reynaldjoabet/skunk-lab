@@ -17,6 +17,7 @@ import org.typelevel.otel4s.trace.StatusCode
 import org.typelevel.otel4s.trace.Tracer
 import org.typelevel.otel4s.trace.TracerProvider
 import org.typelevel.otel4s.Attribute
+import pureconfig.ConfigReader
 import skunk.*
 
 // ── Configuration ──────────────────────────────────────────────────────
@@ -45,7 +46,7 @@ case class DbConfig(
     commandCacheSize: Int,
     queryCacheSize: Int,
     parseCacheSize: Int
-)
+) derives ConfigReader
 
 object DbConfig {
 
@@ -59,7 +60,7 @@ object DbConfig {
 
 }
 
-case class AppConfig(db: DbConfig)
+case class AppConfig(db: DbConfig) derives ConfigReader
 
 // ── Pool metrics ───────────────────────────────────────────────────────
 
