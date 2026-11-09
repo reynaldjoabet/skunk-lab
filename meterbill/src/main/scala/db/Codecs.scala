@@ -10,6 +10,9 @@ import skunk.data.Type
 
 object Codecs {
 
+  // Output-column decoders must match the declared length (varchar(n)), or
+  // skunk rejects the statement at prepare time with ColumnAlignmentException.
+
   val planTier: Codec[PlanTier] = `enum`(_.label, PlanTier.fromLabel, Type("plan_tier"))
 
   val billingPeriod: Codec[BillingPeriod] =
@@ -21,10 +24,12 @@ object Codecs {
   val subStatus: Codec[SubStatus] = `enum`(_.label, SubStatus.fromLabel, Type("sub_status"))
 
   val tenant: Decoder[Tenant] =
-    (uuid *: varchar *: varchar *: varchar *: jsonb *: timestamptz).to[Tenant]
+    (uuid *: varchar(63) *: varchar(255) *: varchar(255) *: jsonb *: timestamptz).to[Tenant]
 
   val plan: Decoder[Plan] =
-    (uuid *: varchar *: planTier *: billingPeriod *: int8 *: int8 *: int8 *: bool *: timestamptz)
+    (uuid *: varchar(
+      100
+    ) *: planTier *: billingPeriod *: int8 *: int8 *: int8 *: bool *: timestamptz)
       .to[Plan]
 
   val subscription: Decoder[Subscription] =
@@ -32,7 +37,7 @@ object Codecs {
       .to[Subscription]
 
   val usageEvent: Decoder[UsageEvent] =
-    (uuid *: uuid *: uuid *: varchar *: int8 *: varchar *: timestamptz).to[UsageEvent]
+    (uuid *: uuid *: uuid *: varchar(50) *: int8 *: varchar(255) *: timestamptz).to[UsageEvent]
 
   val invoice: Decoder[Invoice] =
     (uuid *: uuid *: uuid *: timestamptz *: timestamptz *: int8 *: int8 *: int8 *: int8 *: invoiceStatus *: timestamptz.opt *: timestamptz.opt *: timestamptz)
@@ -42,6 +47,6 @@ object Codecs {
     (uuid *: uuid *: text *: int8 *: int8 *: int8).to[LineItem]
 
   val usageSummary: Decoder[UsageSummary] =
-    (varchar *: int8).to[UsageSummary]
+    (varchar(50) *: int8).to[UsageSummary]
 
 }

@@ -16,7 +16,7 @@ object UsageRoutes {
   private given CanEqual[Method, Method]     = CanEqual.derived
   private given CanEqual[Uri.Path, Uri.Path] = CanEqual.derived
 
-  def routes[F[_]: Concurrent](pool: Resource[F, skunk.Session[F]]): HttpRoutes[F] = {
+  def routes[F[_]: Async](pool: Resource[F, skunk.Session[F]]): HttpRoutes[F] = {
     val dsl = new Http4sDsl[F] {}; import dsl._
     HttpRoutes.of[F] {
 

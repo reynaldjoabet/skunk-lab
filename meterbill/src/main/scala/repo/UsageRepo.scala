@@ -46,7 +46,7 @@ object UsageRepo {
     val totalForPeriod
         : Query[UUID *: String *: OffsetDateTime *: OffsetDateTime *: EmptyTuple, Long] =
       sql"""
-        SELECT COALESCE(SUM(quantity), 0)
+        SELECT COALESCE(SUM(quantity), 0)::int8
         FROM usage_events
         WHERE subscription_id = $uuid AND metric = $varchar
           AND recorded_at >= $timestamptz AND recorded_at < $timestamptz
@@ -55,7 +55,7 @@ object UsageRepo {
     val summaryForPeriod
         : Query[UUID *: OffsetDateTime *: OffsetDateTime *: EmptyTuple, UsageSummary] =
       sql"""
-        SELECT metric, COALESCE(SUM(quantity), 0)
+        SELECT metric, COALESCE(SUM(quantity), 0)::int8
         FROM usage_events
         WHERE subscription_id = $uuid
           AND recorded_at >= $timestamptz AND recorded_at < $timestamptz
