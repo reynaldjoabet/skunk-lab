@@ -4,15 +4,15 @@ object Dependencies {
 
   private object Version {
 
-    val http4s     = "0.23.37"
-    val circe      = "0.14.16"
+    val http4s     = "0.23.38"
+    val circe      = "0.14.17"
     val skunk      = "2.0.0-RC3"
-    val otel4s     = "1.1.0"
-    val otelJava   = "1.67.0" // OpenTelemetry Java SDK runtime exporters
-    val tapir      = "1.13.31"
+    val otel4s     = "1.2.0"
+    val otelJava   = "1.68.0" // OpenTelemetry Java SDK runtime exporters
+    val tapir      = "1.14.1"
     val iron       = "3.4.1"
-    val pureconfig = "0.17.10"
-    val jsoniter   = "2.40.1"
+    val pureconfig = "0.17.11"
+    val jsoniter   = "2.42.3"
 
   }
 
