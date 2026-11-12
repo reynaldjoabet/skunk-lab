@@ -678,3 +678,50 @@ object Main extends IOApp.Simple {
     }
 }
 ```
+## Reading EXPLAIN (ANALYZE, BUFFERS) — pages touched per query
+
+The page counts come from Postgres itself. `EXPLAIN (ANALYZE, BUFFERS)` runs the query and reports every buffer it touched, and a buffer is one 8 KB page.
+
+```sql
+EXPLAIN (ANALYZE, BUFFERS)
+SELECT * FROM usage_events
+WHERE tenant_id = '<some tenant id>'
+ORDER BY recorded_at DESC LIMIT 50;
+```
+
+Example from the meterbill load test (1M usage events, 1,000 per tenant), before and after adding the read indexes in `V2__usage_read_indexes.sql`:
+
+**summary before:**
+```
+->  Bitmap Heap Scan on usage_events
+      Heap Blocks: exact=1012
+      Buffers: shared hit=1020
+      ->  Bitmap Index Scan on idx_usage_sub_period
+            Buffers: shared hit=8
+```
+
+**summary after:**
+```
+->  Index Only Scan using idx_usage_sub_period_covering on usage_events
+      Heap Fetches: 54
+      Buffers: shared hit=56 read=8 dirtied=4
+```
+
+**recent before → after:**
+```
+Buffers: shared hit=18 read=1009 dirtied=1      (Bitmap Heap Scan + top-N sort)
+Buffers: shared hit=51                          (Index Scan using idx_usage_tenant_recent, LIMIT 50)
+```
+
+How to read them:
+
+- `hit` counts pages already in Postgres's shared memory cache.
+- `read` counts pages it had to fetch from the operating system's cache or from disk.
+- `hit + read` is the total number of pages the query touched. The count includes index pages as well as table pages.
+- In summary's "before" plan, 8 of the 1,020 pages were index pages and 1,012 were table pages (`Heap Blocks: exact=1012`), about one page per event.
+- The counts are cumulative: each plan node includes the pages of the nodes below it. Quote the node or top-level totals rather than adding up every line.
+
+Caveats:
+
+- An index-only scan skips the table only for pages the visibility map marks all-visible. `Heap Fetches: 54` means 54 rows still needed a table check (pages changed since the last vacuum), so "after" is *mostly* index-only, not entirely.
+- Compare page counts, not timings, across runs: a "before" that fetched most pages from outside the cache (`read=1009`) and an "after" that found everything cached (`hit=51`) aren't a like-for-like timing comparison.
