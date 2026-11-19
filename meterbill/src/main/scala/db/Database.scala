@@ -24,6 +24,7 @@ object Database {
       .withPort(cfg.port)
       .withUserAndPassword(cfg.user, cfg.password)
       .withDatabase(cfg.database)
+      .withSSL(if (cfg.ssl) SSL.System else SSL.None)
       .withTypingStrategy(TypingStrategy.SearchPath)
       .withRedactionStrategy(RedactionStrategy.All)
       .withReadTimeout(30.seconds)

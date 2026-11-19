@@ -14,13 +14,18 @@ import skunk.implicits._
 
 trait UsageRepo[F[_]] {
 
+  /**
+    * Inserts the event; returns None if the idempotency key has already been used.
+    */
   def record(
       tenantId: UUID,
       subId: UUID,
       metric: String,
       quantity: Long,
       key: String
-  ): F[UsageEvent]
+  ): F[Option[UsageEvent]]
+
+  def findByKey(tenantId: UUID, key: String): F[Option[UsageEvent]]
 
   def recordBatch(events: List[UsageEvent]): F[Unit]
   def totalForPeriod(subId: UUID, metric: String, from: OffsetDateTime, to: OffsetDateTime): F[Long]
@@ -40,8 +45,13 @@ object UsageRepo {
       sql"""
         INSERT INTO usage_events (tenant_id, subscription_id, metric, quantity, idempotency_key)
         VALUES ($uuid, $uuid, $varchar, $int8, $varchar)
+        ON CONFLICT (idempotency_key) DO NOTHING
         RETURNING #$cols
       """.query(usageEvent)
+
+    val byKey: Query[UUID *: String *: EmptyTuple, UsageEvent] =
+      sql"SELECT #$cols FROM usage_events WHERE tenant_id = $uuid AND idempotency_key = $varchar"
+        .query(usageEvent)
 
     val totalForPeriod
         : Query[UUID *: String *: OffsetDateTime *: OffsetDateTime *: EmptyTuple, Long] =
@@ -71,14 +81,17 @@ object UsageRepo {
   def make[F[_]: Concurrent](s: Session[F]): F[UsageRepo[F]] =
     (
       s.prepare(SQL.insert),
+      s.prepare(SQL.byKey),
       s.prepare(SQL.totalForPeriod),
       s.prepare(SQL.summaryForPeriod),
       s.prepare(SQL.recent)
-    ).mapN { (pInsert, pTotal, pSummary, pRecent) =>
+    ).mapN { (pInsert, pByKey, pTotal, pSummary, pRecent) =>
       new UsageRepo[F] {
 
         def record(tenantId: UUID, subId: UUID, metric: String, quantity: Long, key: String) =
-          pInsert.unique((tenantId, subId, metric, quantity, key))
+          pInsert.option((tenantId, subId, metric, quantity, key))
+
+        def findByKey(tenantId: UUID, key: String) = pByKey.option((tenantId, key))
 
         def recordBatch(events: List[UsageEvent]): F[Unit] = {
           val enc = (uuid *: uuid *: varchar *: int8 *: varchar).values.list(events.length)

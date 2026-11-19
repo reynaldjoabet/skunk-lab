@@ -100,7 +100,7 @@ lazy val meterbill = (project in file("meterbill"))
   .settings(
     name                 := "meterbill",
     Compile / mainClass  := Some("meterbill.Main"),
-    libraryDependencies ++= common
+    libraryDependencies ++= common :+ munit
   )
   .settings(deploySettings *)
 

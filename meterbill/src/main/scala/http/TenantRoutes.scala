@@ -25,7 +25,7 @@ object TenantRoutes {
 
       case req @ POST -> Root / "tenants" =>
         ErrorHandler.handle(for {
-          body   <- req.as[CreateTenantReq]
+          body   <- req.as[CreateTenantReq].flatMap(r => Validation.tenant(r).liftTo[F])
           tenant <-
             pool.use(s => TenantRepo.make(s).flatMap(_.create(body.slug, body.name, body.email)))
           resp <- Created(tenant)
@@ -59,7 +59,9 @@ object TenantRoutes {
         )
 
       case GET -> Root / "plans" =>
-        pool.use(s => SubscriptionService.make(s).flatMap(_.listPlans)).flatMap(Ok(_))
+        ErrorHandler.handle(
+          pool.use(s => SubscriptionService.make(s).flatMap(_.listPlans)).flatMap(Ok(_))
+        )
     }
   }
 

@@ -10,6 +10,7 @@ import meterbill.db.Codecs._
 import meterbill.domain._
 import skunk._
 import skunk.codec.all._
+import skunk.data.Completion
 import skunk.implicits._
 
 trait InvoiceRepo[F[_]] {
@@ -37,7 +38,12 @@ trait InvoiceRepo[F[_]] {
   def findByTenant(tenantId: UUID): F[List[Invoice]]
   def getLineItems(invoiceId: UUID): F[List[LineItem]]
   def issue(id: UUID): F[Unit]
-  def markPaid(id: UUID): F[Unit]
+
+  /**
+    * Marks an open invoice paid. Returns false if the invoice is missing or not open.
+    */
+  def markPaid(id: UUID): F[Boolean]
+
   def markVoid(id: UUID): F[Unit]
 
 }
@@ -84,7 +90,7 @@ object InvoiceRepo {
       sql"UPDATE invoices SET status = 'open', issued_at = now() WHERE id = $uuid".command
 
     val doPaid: Command[UUID] =
-      sql"UPDATE invoices SET status = 'paid', paid_at = now() WHERE id = $uuid".command
+      sql"UPDATE invoices SET status = 'paid', paid_at = now() WHERE id = $uuid AND status = 'open'".command
 
     val doVoid: Command[UUID] =
       sql"UPDATE invoices SET status = 'void' WHERE id = $uuid".command
@@ -123,8 +129,13 @@ object InvoiceRepo {
         def findByTenant(tid: UUID) = pByTenant.stream(tid, 32).compile.toList
         def getLineItems(iid: UUID) = pLineItems.stream(iid, 64).compile.toList
         def issue(id: UUID)         = pIssue.execute(id).void
-        def markPaid(id: UUID)      = pPaid.execute(id).void
-        def markVoid(id: UUID)      = pVoid.execute(id).void
+
+        def markPaid(id: UUID) = pPaid.execute(id).map {
+          case Completion.Update(n) => n > 0
+          case _                    => false
+        }
+
+        def markVoid(id: UUID) = pVoid.execute(id).void
 
       }
     }

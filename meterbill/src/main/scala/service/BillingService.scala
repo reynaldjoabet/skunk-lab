@@ -27,7 +27,13 @@ object BillingService {
   case class InvoiceNotFound(id: UUID) extends Exception(s"Invoice $id not found")
   case class AlreadyInvoiced()         extends Exception("Period already invoiced")
 
-  def make[F[_]: MonadCancelThrow: Concurrent](s: Session[F]): F[BillingService[F]] =
+  case class PeriodNotEnded(end: OffsetDateTime)
+      extends Exception(s"Current period is still open; it can be invoiced from $end")
+
+  case class InvoiceNotPayable(id: UUID, status: InvoiceStatus)
+      extends Exception(s"Invoice $id is ${status.label} and cannot be paid")
+
+  def make[F[_]: Concurrent: Clock](s: Session[F]): F[BillingService[F]] =
     (SubscriptionRepo.make(s), PlanRepo.make(s), UsageRepo.make(s), InvoiceRepo.make(s)).mapN {
       (subs, plans, usage, invoices) =>
         new BillingService[F] {
@@ -35,34 +41,7 @@ object BillingService {
           private def calculate(sub: Subscription, plan: Plan): F[InvoicePreview] =
             usage
               .summaryForPeriod(sub.id, sub.currentPeriodStart, sub.currentPeriodEnd)
-              .map { metrics =>
-                val totalUsage    = metrics.map(_.totalQuantity).sum
-                val overageUnits  = math.max(0L, totalUsage - plan.includedUnits)
-                val overageAmount = overageUnits * plan.overageRateCents
-                val total         = plan.basePriceCents + overageAmount
-
-                val lines = List(
-                  LineItemPreview(
-                    s"${plan.name} ${plan.period.label} base",
-                    1,
-                    plan.basePriceCents,
-                    plan.basePriceCents
-                  )
-                ) ++ metrics.map { m =>
-                  LineItemPreview(s"Usage: ${m.metric}", m.totalQuantity, 0, 0)
-                } ++ (if (overageUnits > 0)
-                        List(
-                          LineItemPreview(
-                            s"Overage ($overageUnits units × ${plan.overageRateCents}¢)",
-                            overageUnits,
-                            plan.overageRateCents,
-                            overageAmount
-                          )
-                        )
-                      else Nil)
-
-                InvoicePreview(plan.basePriceCents, overageUnits, overageAmount, total, lines)
-              }
+              .map(InvoiceCalculator.price(plan, _))
 
           def preview(subscriptionId: UUID): F[InvoicePreview] =
             for {
@@ -77,7 +56,14 @@ object BillingService {
                 for {
                   sub <-
                     subs.findById(subscriptionId).flatMap(_.liftTo[F](SubNotFound(subscriptionId)))
-                  plan    <- plans.findById(sub.planId).flatMap(_.liftTo[F](PlanNotFound(sub.planId)))
+                  plan <- plans.findById(sub.planId).flatMap(_.liftTo[F](PlanNotFound(sub.planId)))
+                  // Only a closed period can be invoiced. Invoicing early would
+                  // advance the period, and usage recorded in the rest of the
+                  // old period would then never be billed.
+                  now <- Clock[F].realTimeInstant
+                  _   <- MonadCancelThrow[F]
+                         .raiseError(PeriodNotEnded(sub.currentPeriodEnd))
+                         .whenA(now.isBefore(sub.currentPeriodEnd.toInstant))
                   prev    <- calculate(sub, plan)
                   invoice <- invoices
                                .create(
@@ -109,16 +95,32 @@ object BillingService {
                   _ <- subs.advancePeriod(
                          sub.id,
                          sub.currentPeriodEnd,
-                         sub.currentPeriodEnd.plusMonths(1)
+                         InvoiceCalculator.periodEnd(plan.period, sub.currentPeriodEnd)
                        )
-                } yield invoice
+                  // Re-read so the response shows the issued invoice (status
+                  // open, issued_at set) rather than the draft row as inserted.
+                  issued <- invoices.findById(invoice.id)
+                } yield issued.getOrElse(invoice)
               }
 
           def markPaid(invoiceId: UUID): F[Unit] =
+            // The update only matches an open invoice, so the status check and
+            // the write are one atomic statement. If nothing matched, look at
+            // why: paying an already-paid invoice is a harmless retry, anything
+            // else (draft, void, uncollectible, missing) is an error.
             invoices
-              .findById(invoiceId)
-              .flatMap(_.liftTo[F](InvoiceNotFound(invoiceId)))
-              .flatMap(_ => invoices.markPaid(invoiceId))
+              .markPaid(invoiceId)
+              .ifM(
+                ().pure[F],
+                invoices
+                  .findById(invoiceId)
+                  .flatMap {
+                    case None                                          => InvoiceNotFound(invoiceId).raiseError[F, Unit]
+                    case Some(inv) if inv.status == InvoiceStatus.Paid => ().pure[F]
+                    case Some(inv)                                     =>
+                      InvoiceNotPayable(invoiceId, inv.status).raiseError[F, Unit]
+                  }
+              )
 
           def listInvoices(tenantId: UUID): F[List[Invoice]] =
             invoices.findByTenant(tenantId)

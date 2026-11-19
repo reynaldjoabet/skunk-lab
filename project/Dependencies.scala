@@ -14,6 +14,7 @@ object Dependencies {
     val pureconfig = "0.17.11"
     val jsoniter   = "2.42.3"
     val logback    = "1.5.38"
+    val munit      = "1.3.6"
 
   }
 
@@ -71,6 +72,9 @@ object Dependencies {
   // SLF4J backend: without it, slf4j-api falls back to a no-op logger and
   // every log line (ours, http4s, skunk) is silently dropped.
   lazy val logback = "ch.qos.logback" % "logback-classic" % Version.logback % Runtime
+
+  // ─── Testing ────────────────────────────────────────────────────────
+  lazy val munit = "org.scalameta" %% "munit" % Version.munit % Test
 
   // ─── JSON (jsoniter-scala) ───────────────────────────────────────────
   lazy val jsoniterCore =

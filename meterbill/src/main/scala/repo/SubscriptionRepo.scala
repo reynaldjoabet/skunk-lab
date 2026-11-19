@@ -14,7 +14,10 @@ import skunk.implicits._
 
 trait SubscriptionRepo[F[_]] {
 
-  def create(tenantId: UUID, planId: UUID): F[Subscription]
+  /**
+    * Creates a subscription whose first period length follows the plan's billing period.
+    */
+  def create(tenantId: UUID, planId: UUID): F[Option[Subscription]]
   def findById(id: UUID): F[Option[Subscription]]
   def findByTenant(tenantId: UUID): F[List[Subscription]]
   def findActive(tenantId: UUID): F[Option[Subscription]]
@@ -30,10 +33,17 @@ object SubscriptionRepo {
 
   private object SQL {
 
+    // Selecting from plans sets the first period from the plan's billing
+    // period (the column default is always one month) and returns no row if
+    // the plan does not exist.
     val insert: Query[UUID *: UUID *: EmptyTuple, Subscription] =
       sql"""
-        INSERT INTO subscriptions (tenant_id, plan_id)
-        VALUES ($uuid, $uuid)
+        INSERT INTO subscriptions (tenant_id, plan_id, current_period_end)
+        SELECT $uuid, p.id,
+               date_trunc('month', now()) +
+                 CASE p.period WHEN 'yearly' THEN interval '1 year' ELSE interval '1 month' END
+        FROM plans p
+        WHERE p.id = $uuid
         RETURNING #$cols
       """.query(subscription)
 
@@ -68,7 +78,7 @@ object SubscriptionRepo {
     ).mapN { (pInsert, pById, pByTenant, pActive, pCancel, pAdvance) =>
       new SubscriptionRepo[F] {
 
-        def create(tenantId: UUID, planId: UUID) = pInsert.unique((tenantId, planId))
+        def create(tenantId: UUID, planId: UUID) = pInsert.option((tenantId, planId))
         def findById(id: UUID)                   = pById.option(id)
         def findByTenant(tenantId: UUID)         = pByTenant.stream(tenantId, 32).compile.toList
         def findActive(tenantId: UUID)           = pActive.option(tenantId)

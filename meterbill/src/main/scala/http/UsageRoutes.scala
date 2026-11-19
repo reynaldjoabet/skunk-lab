@@ -22,9 +22,10 @@ object UsageRoutes {
 
       case req @ POST -> Root / "tenants" / UUIDVar(id) / "usage" =>
         ErrorHandler.handle(for {
-          body  <- req.as[RecordUsageReq]
-          event <- pool.use(s => MeteringService.make(s).flatMap(_.record(id, body)))
-          resp  <- Created(event)
+          body     <- req.as[RecordUsageReq].flatMap(r => Validation.usage(r).liftTo[F])
+          recorded <- pool.use(s => MeteringService.make(s).flatMap(_.record(id, body)))
+          // 201 for a new event, 200 when a retry returned the stored one.
+          resp <- if (recorded.created) Created(recorded.event) else Ok(recorded.event)
         } yield resp)
 
       case GET -> Root / "tenants" / UUIDVar(id) / "usage" / "summary" =>

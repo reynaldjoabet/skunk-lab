@@ -23,6 +23,8 @@ trait TenantRepo[F[_]] {
 
 object TenantRepo {
 
+  case class TenantExists() extends Exception("A tenant with this slug or email already exists")
+
   private object SQL {
 
     val insert: Query[String *: String *: String *: EmptyTuple, Tenant] =
@@ -49,7 +51,11 @@ object TenantRepo {
         new TenantRepo[F] {
 
           def create(slug: String, name: String, email: String) =
-            pInsert.unique((slug, name, email))
+            pInsert
+              .unique((slug, name, email))
+              .recoverWith { case SqlState.UniqueViolation(_) =>
+                MonadCancelThrow[F].raiseError(TenantExists())
+              }
 
           def findById(id: UUID)       = pById.option(id)
           def findBySlug(slug: String) = pBySlug.option(slug)

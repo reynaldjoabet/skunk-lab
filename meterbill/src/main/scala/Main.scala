@@ -3,11 +3,11 @@ package meterbill
 import cats.effect._
 import cats.syntax.all._
 
-import com.comcast.ip4s._
 import meterbill.config.AppConfig
 import meterbill.db.Database
 import meterbill.http._
 import org.http4s.ember.server.EmberServerBuilder
+import org.http4s.server.middleware.EntityLimiter
 import org.http4s.server.Router
 import org.typelevel.otel4s.metrics.Meter
 import org.typelevel.otel4s.metrics.MeterProvider
@@ -16,6 +16,8 @@ import org.typelevel.otel4s.trace.Tracer
 import org.typelevel.otel4s.trace.TracerProvider
 
 object Main extends IOApp.Simple {
+
+  private val MaxRequestBodyBytes = 1024L * 1024L
 
   val run: IO[Unit] =
     OtelJava
@@ -39,7 +41,7 @@ object Main extends IOApp.Simple {
           Database
             .pool[IO](cfg.db)
             .use { pool =>
-              val app = Router(
+              val routes = Router(
                 "/api" -> (
                   TenantRoutes.routes[IO](pool) <+>
                     UsageRoutes.routes[IO](pool) <+>
@@ -48,10 +50,14 @@ object Main extends IOApp.Simple {
                 )
               ).orNotFound
 
+              // Every request body here is a small JSON document; refuse to
+              // buffer anything larger rather than let a client exhaust memory.
+              val app = EntityLimiter.httpApp(routes, MaxRequestBodyBytes)
+
               EmberServerBuilder
                 .default[IO]
-                .withHost(Host.fromString(cfg.http.host).getOrElse(ipv4"0.0.0.0"))
-                .withPort(Port.fromInt(cfg.http.port).getOrElse(port"8080"))
+                .withHost(cfg.http.host)
+                .withPort(cfg.http.port)
                 .withHttpApp(app)
                 .build
                 .useForever

@@ -3,9 +3,12 @@ package meterbill.domain
 import java.time.OffsetDateTime
 import java.util.UUID
 
+import io.circe.Decoder
+import io.circe.Encoder
 import io.circe.Json
 
 // ─── Enums ───
+// JSON uses the same lowercase labels as the Postgres enum types.
 
 enum PlanTier(val label: String) derives CanEqual {
 
@@ -17,7 +20,14 @@ enum PlanTier(val label: String) derives CanEqual {
 }
 
 object PlanTier {
+
   def fromLabel(s: String): Option[PlanTier] = values.find(_.label == s)
+
+  given Encoder[PlanTier] = Encoder.encodeString.contramap(_.label)
+
+  given Decoder[PlanTier] =
+    Decoder.decodeString.emap(s => fromLabel(s).toRight(s"Unknown PlanTier: $s"))
+
 }
 
 enum BillingPeriod(val label: String) derives CanEqual {
@@ -28,7 +38,14 @@ enum BillingPeriod(val label: String) derives CanEqual {
 }
 
 object BillingPeriod {
+
   def fromLabel(s: String): Option[BillingPeriod] = values.find(_.label == s)
+
+  given Encoder[BillingPeriod] = Encoder.encodeString.contramap(_.label)
+
+  given Decoder[BillingPeriod] =
+    Decoder.decodeString.emap(s => fromLabel(s).toRight(s"Unknown BillingPeriod: $s"))
+
 }
 
 enum InvoiceStatus(val label: String) derives CanEqual {
@@ -42,7 +59,14 @@ enum InvoiceStatus(val label: String) derives CanEqual {
 }
 
 object InvoiceStatus {
+
   def fromLabel(s: String): Option[InvoiceStatus] = values.find(_.label == s)
+
+  given Encoder[InvoiceStatus] = Encoder.encodeString.contramap(_.label)
+
+  given Decoder[InvoiceStatus] =
+    Decoder.decodeString.emap(s => fromLabel(s).toRight(s"Unknown InvoiceStatus: $s"))
+
 }
 
 enum SubStatus(val label: String) derives CanEqual {
@@ -55,7 +79,14 @@ enum SubStatus(val label: String) derives CanEqual {
 }
 
 object SubStatus {
+
   def fromLabel(s: String): Option[SubStatus] = values.find(_.label == s)
+
+  given Encoder[SubStatus] = Encoder.encodeString.contramap(_.label)
+
+  given Decoder[SubStatus] =
+    Decoder.decodeString.emap(s => fromLabel(s).toRight(s"Unknown SubStatus: $s"))
+
 }
 
 // ─── Models ───

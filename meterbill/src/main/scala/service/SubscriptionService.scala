@@ -23,6 +23,8 @@ object SubscriptionService {
   case class TenantNotFound(id: UUID) extends Exception(s"Tenant $id not found")
   case class PlanNotFound(id: UUID)   extends Exception(s"Plan $id not found")
 
+  case class PlanInactive(id: UUID) extends Exception(s"Plan $id is no longer offered")
+
   case class AlreadySubscribed(tid: UUID)
       extends Exception(s"Tenant $tid already has an active subscription")
 
@@ -33,11 +35,20 @@ object SubscriptionService {
         def subscribe(tenantId: UUID, planId: UUID): F[Subscription] =
           for {
             _        <- tenants.findById(tenantId).flatMap(_.liftTo[F](TenantNotFound(tenantId)))
-            _        <- plans.findById(planId).flatMap(_.liftTo[F](PlanNotFound(planId)))
+            plan     <- plans.findById(planId).flatMap(_.liftTo[F](PlanNotFound(planId)))
+            _        <- MonadCancelThrow[F].raiseError(PlanInactive(planId)).unlessA(plan.active)
             existing <- subs.findActive(tenantId)
             _        <-
               MonadCancelThrow[F].raiseError(AlreadySubscribed(tenantId)).whenA(existing.isDefined)
-            sub <- subs.create(tenantId, planId)
+            // The check above is only a fast path: two concurrent requests can
+            // both pass it. The unique indexes are what actually enforce one
+            // active subscription per tenant, so map their violation too.
+            created <- subs
+                         .create(tenantId, planId)
+                         .recoverWith { case skunk.SqlState.UniqueViolation(_) =>
+                           MonadCancelThrow[F].raiseError(AlreadySubscribed(tenantId))
+                         }
+            sub <- created.liftTo[F](PlanNotFound(planId))
           } yield sub
 
         def cancel(subscriptionId: UUID) = subs.cancel(subscriptionId)
