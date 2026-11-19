@@ -4,7 +4,7 @@ object Dependencies {
 
   private object Version {
 
-    val http4s     = "0.23.38"
+    val http4s     = "0.23.39"
     val circe      = "0.14.17"
     val skunk      = "2.0.0-RC3"
     val otel4s     = "1.2.0"
@@ -12,8 +12,8 @@ object Dependencies {
     val tapir      = "1.14.1"
     val iron       = "3.4.1"
     val pureconfig = "0.17.11"
-    val jsoniter   = "2.42.3"
-    val logback    = "1.5.38"
+    val jsoniter   = "2.43.0"
+    val logback    = "1.6.7"
     val munit      = "1.3.6"
 
   }
