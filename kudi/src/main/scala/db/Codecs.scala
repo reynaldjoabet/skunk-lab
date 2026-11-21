@@ -64,18 +64,18 @@ object Codecs {
   val wallet: Decoder[Wallet] =
     (int8 *: int8 *: numeric *: numeric *: numeric *: numeric *: numeric *: numeric *:
       timestamptz *: walletTypeId *: walletStatusId *: bool *:
-      bpchar(3) *: text.opt *: jsonb).to[Wallet]
+      text *: text.opt *: jsonb).to[Wallet]
 
   val transaction: Decoder[Transaction] =
     (int8 *: int8.opt *: int8.opt *: numeric *: numeric *: numeric.opt *: numeric.opt *:
       timestamptz *: timestamptz.opt *: timestamptz.opt *:
       int8.opt *: int8.opt *: txnTypeId *: txnStatusId *: bool *:
-      bpchar(3).opt *: bpchar(3).opt *: text *: text.opt *: text.opt *:
+      text.opt *: text.opt *: text *: text.opt *: text.opt *:
       text.opt *: text.opt *: jsonb).to[Transaction]
 
   val ledgerEntry: Decoder[LedgerEntry] =
     (int8 *: int8 *: timestamptz *: int8 *: numeric *: numeric *:
-      timestamptz *: entryTypeId *: bpchar(3) *: text.opt *: jsonb).to[LedgerEntry]
+      timestamptz *: entryTypeId *: text *: text.opt *: jsonb).to[LedgerEntry]
 
   val auditLogEntry: Decoder[AuditLogEntry] =
     (int8 *: int8.opt *: timestamptz *: text *: text *: text *:

@@ -37,6 +37,18 @@ object TransferService {
       audit   <- AuditRepo.fromSession(s)
     } yield new TransferService[F] {
 
+      // Runs a money movement once per reference id. The key claim and every
+      // write share one database transaction: wallet row locks, the ledger
+      // entries and the balance updates commit together or not at all, and a
+      // retried or concurrent request replays the stored result.
+      private def idempotent(referenceId: String)(move: => F[Transaction]): F[Transaction] =
+        s.transaction.use { _ =>
+          txns.claimReference(referenceId).flatMap {
+            case Some(existing) => existing.pure[F]
+            case None           => move
+          }
+        }
+
       private def countTxn(txnType: String): F[Unit] =
         txnCount.add(1L, Attribute("txn.type", txnType))
 
@@ -47,13 +59,7 @@ object TransferService {
           Attribute("txn.reference", req.referenceId),
           Attribute("txn.amount", req.amount.toDouble)
         ) {
-          for {
-            existing <- txns.findByReference(req.referenceId)
-            txn      <- existing match {
-                     case Some(t) => t.pure[F]
-                     case None    => doTransfer(req)
-                   }
-          } yield txn
+          idempotent(req.referenceId)(doTransfer(req))
         }
 
       private def doTransfer(req: TransferRequest): F[Transaction] = {
@@ -124,41 +130,36 @@ object TransferService {
           Attribute("txn.reference", req.referenceId),
           Attribute("txn.amount", req.amount.toDouble)
         ) {
-          for {
-            existing <- txns.findByReference(req.referenceId)
-            txn      <- existing match {
-                     case Some(t) => t.pure[F]
-                     case None    =>
-                       for {
-                         _   <- wallets.findByIdForUpdate(req.destWalletId)
-                         txn <- txns.create(
-                                  sourceWalletId = None,
-                                  destWalletId = Some(req.destWalletId),
-                                  amount = req.amount,
-                                  feeAmount = BigDecimal(0),
-                                  txnTypeId = TxnTypeId.TopUp,
-                                  sourceCurrency = None,
-                                  destCurrency = Some(req.currencyCode),
-                                  referenceId = req.referenceId,
-                                  description = req.description,
-                                  ipAddress = None
-                                )
-                         credited <- wallets.credit(req.destWalletId, req.amount)
-                         _        <- ledger.insertEntry(
-                                txnId = txn.txnId,
-                                txnCreatedAt = txn.createdAt,
-                                walletId = req.destWalletId,
-                                amount = req.amount,
-                                balanceAfter = credited.balance,
-                                entryTypeId = EntryTypeId.Credit,
-                                currencyCode = req.currencyCode,
-                                description = req.description
-                              )
-                         _ <- txns.complete(txn.txnId, txn.createdAt)
-                         _ <- countTxn("top_up")
-                       } yield txn
-                   }
-          } yield txn
+          idempotent(req.referenceId) {
+            for {
+              _   <- wallets.findByIdForUpdate(req.destWalletId)
+              txn <- txns.create(
+                       sourceWalletId = None,
+                       destWalletId = Some(req.destWalletId),
+                       amount = req.amount,
+                       feeAmount = BigDecimal(0),
+                       txnTypeId = TxnTypeId.TopUp,
+                       sourceCurrency = None,
+                       destCurrency = Some(req.currencyCode),
+                       referenceId = req.referenceId,
+                       description = req.description,
+                       ipAddress = None
+                     )
+              credited <- wallets.credit(req.destWalletId, req.amount)
+              _        <- ledger.insertEntry(
+                     txnId = txn.txnId,
+                     txnCreatedAt = txn.createdAt,
+                     walletId = req.destWalletId,
+                     amount = req.amount,
+                     balanceAfter = credited.balance,
+                     entryTypeId = EntryTypeId.Credit,
+                     currencyCode = req.currencyCode,
+                     description = req.description
+                   )
+              _ <- txns.complete(txn.txnId, txn.createdAt)
+              _ <- countTxn("top_up")
+            } yield txn
+          }
         }
 
       def withdraw(req: WithdrawalRequest): F[Transaction] =
@@ -168,41 +169,36 @@ object TransferService {
           Attribute("txn.reference", req.referenceId),
           Attribute("txn.amount", req.amount.toDouble)
         ) {
-          for {
-            existing <- txns.findByReference(req.referenceId)
-            txn      <- existing match {
-                     case Some(t) => t.pure[F]
-                     case None    =>
-                       for {
-                         _   <- wallets.findByIdForUpdate(req.sourceWalletId)
-                         txn <- txns.create(
-                                  sourceWalletId = Some(req.sourceWalletId),
-                                  destWalletId = None,
-                                  amount = req.amount,
-                                  feeAmount = BigDecimal(0),
-                                  txnTypeId = TxnTypeId.Withdrawal,
-                                  sourceCurrency = Some(req.currencyCode),
-                                  destCurrency = None,
-                                  referenceId = req.referenceId,
-                                  description = req.description,
-                                  ipAddress = None
-                                )
-                         debited <- wallets.debit(req.sourceWalletId, req.amount)
-                         _       <- ledger.insertEntry(
-                                txnId = txn.txnId,
-                                txnCreatedAt = txn.createdAt,
-                                walletId = req.sourceWalletId,
-                                amount = -req.amount,
-                                balanceAfter = debited.balance,
-                                entryTypeId = EntryTypeId.Debit,
-                                currencyCode = req.currencyCode,
-                                description = req.description
-                              )
-                         _ <- txns.complete(txn.txnId, txn.createdAt)
-                         _ <- countTxn("withdrawal")
-                       } yield txn
-                   }
-          } yield txn
+          idempotent(req.referenceId) {
+            for {
+              _   <- wallets.findByIdForUpdate(req.sourceWalletId)
+              txn <- txns.create(
+                       sourceWalletId = Some(req.sourceWalletId),
+                       destWalletId = None,
+                       amount = req.amount,
+                       feeAmount = BigDecimal(0),
+                       txnTypeId = TxnTypeId.Withdrawal,
+                       sourceCurrency = Some(req.currencyCode),
+                       destCurrency = None,
+                       referenceId = req.referenceId,
+                       description = req.description,
+                       ipAddress = None
+                     )
+              debited <- wallets.debit(req.sourceWalletId, req.amount)
+              _       <- ledger.insertEntry(
+                     txnId = txn.txnId,
+                     txnCreatedAt = txn.createdAt,
+                     walletId = req.sourceWalletId,
+                     amount = -req.amount,
+                     balanceAfter = debited.balance,
+                     entryTypeId = EntryTypeId.Debit,
+                     currencyCode = req.currencyCode,
+                     description = req.description
+                   )
+              _ <- txns.complete(txn.txnId, txn.createdAt)
+              _ <- countTxn("withdrawal")
+            } yield txn
+          }
         }
 
     }

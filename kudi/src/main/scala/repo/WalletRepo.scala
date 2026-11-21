@@ -36,7 +36,7 @@ object WalletRepo {
     val insert: Query[Long *: String *: Short *: EmptyTuple, Wallet] =
       sql"""
         INSERT INTO wallets (user_id, currency_code, wallet_type_id)
-        VALUES ($int8, $bpchar(3), $int2)
+        VALUES ($int8, $text, $int2)
         RETURNING #$cols
       """.query(wallet)
 
@@ -50,7 +50,7 @@ object WalletRepo {
       sql"SELECT #$cols FROM wallets WHERE user_id = $int8 ORDER BY created_at".query(wallet)
 
     val findByUserAndCurrency: Query[Long *: String *: EmptyTuple, Wallet] =
-      sql"SELECT #$cols FROM wallets WHERE user_id = $int8 AND currency_code = $bpchar(3)".query(
+      sql"SELECT #$cols FROM wallets WHERE user_id = $int8 AND currency_code = $text".query(
         wallet
       )
 

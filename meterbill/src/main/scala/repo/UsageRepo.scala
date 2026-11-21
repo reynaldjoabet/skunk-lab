@@ -15,7 +15,9 @@ import skunk.implicits._
 trait UsageRepo[F[_]] {
 
   /**
-    * Inserts the event; returns None if the idempotency key has already been used.
+    * Records the event, or returns the event already stored under this tenant's key if it has the
+    * same metric and quantity (`created = false`). Returns None when the key was used for a
+    * different event.
     */
   def record(
       tenantId: UUID,
@@ -23,9 +25,7 @@ trait UsageRepo[F[_]] {
       metric: String,
       quantity: Long,
       key: String
-  ): F[Option[UsageEvent]]
-
-  def findByKey(tenantId: UUID, key: String): F[Option[UsageEvent]]
+  ): F[Option[(UsageEvent, Boolean)]]
 
   def recordBatch(events: List[UsageEvent]): F[Unit]
   def totalForPeriod(subId: UUID, metric: String, from: OffsetDateTime, to: OffsetDateTime): F[Long]
@@ -41,17 +41,17 @@ object UsageRepo {
 
   private object SQL {
 
-    val insert: Query[UUID *: UUID *: String *: Long *: String *: EmptyTuple, UsageEvent] =
+    // (event, created): created is false when a retry returned the stored event.
+    val insert
+        : Query[UUID *: UUID *: String *: Long *: String *: EmptyTuple, (UsageEvent, Boolean)] =
       sql"""
         INSERT INTO usage_events (tenant_id, subscription_id, metric, quantity, idempotency_key)
         VALUES ($uuid, $uuid, $varchar, $int8, $varchar)
-        ON CONFLICT (idempotency_key) DO NOTHING
-        RETURNING #$cols
-      """.query(usageEvent)
-
-    val byKey: Query[UUID *: String *: EmptyTuple, UsageEvent] =
-      sql"SELECT #$cols FROM usage_events WHERE tenant_id = $uuid AND idempotency_key = $varchar"
-        .query(usageEvent)
+        ON CONFLICT (tenant_id, idempotency_key) DO SELECT
+          WHERE usage_events.metric = excluded.metric
+            AND usage_events.quantity = excluded.quantity
+        RETURNING #$cols, old.id IS NULL
+      """.query(usageEvent *: bool)
 
     val totalForPeriod
         : Query[UUID *: String *: OffsetDateTime *: OffsetDateTime *: EmptyTuple, Long] =
@@ -81,17 +81,16 @@ object UsageRepo {
   def make[F[_]: Concurrent](s: Session[F]): F[UsageRepo[F]] =
     (
       s.prepare(SQL.insert),
-      s.prepare(SQL.byKey),
       s.prepare(SQL.totalForPeriod),
       s.prepare(SQL.summaryForPeriod),
       s.prepare(SQL.recent)
-    ).mapN { (pInsert, pByKey, pTotal, pSummary, pRecent) =>
+    ).mapN { (pInsert, pTotal, pSummary, pRecent) =>
       new UsageRepo[F] {
 
         def record(tenantId: UUID, subId: UUID, metric: String, quantity: Long, key: String) =
+          // PostgreSQL 19 ON CONFLICT DO SELECT: insert, replay, or (no row) a
+          // conflicting payload, decided atomically in one round trip.
           pInsert.option((tenantId, subId, metric, quantity, key))
-
-        def findByKey(tenantId: UUID, key: String) = pByKey.option((tenantId, key))
 
         def recordBatch(events: List[UsageEvent]): F[Unit] = {
           val enc = (uuid *: uuid *: varchar *: int8 *: varchar).values.list(events.length)

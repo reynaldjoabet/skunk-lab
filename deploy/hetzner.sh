@@ -2,7 +2,7 @@
 # deploy/hetzner.sh — Production-grade Hetzner VPS deployment for Kudi wallet platform
 #
 # Provisions a hardened Hetzner Cloud VPS with:
-#   PostgreSQL 18 (scram-sha-256, WAL archiving, daily backups)
+#   PostgreSQL 19 (scram-sha-256, WAL archiving, daily backups)
 #   OpenTelemetry Collector + Jaeger (traces) + Prometheus + Grafana (metrics)
 #   Nginx reverse proxy (rate limiting, security headers, TLS via certbot)
 #   Systemd-managed JVM service with sandboxing
@@ -586,11 +586,14 @@ runcmd:
     fi
     mount "\$VOLUME_DEV" /mnt/pgdata
     echo "\$VOLUME_DEV /mnt/pgdata ext4 defaults,noatime,nofail 0 2" >> /etc/fstab
-    mkdir -p /mnt/pgdata/data /mnt/pgdata/wal-archive
-    chmod 700 /mnt/pgdata/data
-  else
-    mkdir -p /mnt/pgdata/data /mnt/pgdata/wal-archive
   fi
+  # The image creates its data directory (/var/lib/postgresql/19/docker) under
+  # this mount. archive_command runs as the image's postgres user (uid 70), so
+  # it must own the archive directory, or archiving fails and WAL accumulates
+  # in pg_wal until the disk is full.
+  mkdir -p /mnt/pgdata/wal-archive
+  chown 70:70 /mnt/pgdata/wal-archive
+  chmod 700 /mnt/pgdata/wal-archive
 
 # --- Docker ---
 - systemctl enable --now docker
@@ -600,7 +603,7 @@ runcmd:
   cat > $APP_DIR/docker-compose.yaml <<'COMPOSE'
   services:
     postgres:
-      image: postgres:18-alpine
+      image: postgres:19-alpine
       restart: unless-stopped
       environment:
         POSTGRES_USER: kudi
@@ -611,8 +614,10 @@ runcmd:
         - "127.0.0.1:5432:5432"
       volumes:
         - /opt/kudi/migrations:/docker-entrypoint-initdb.d
-        - /mnt/pgdata/data:/var/lib/postgresql/data
-        - /mnt/pgdata/wal-archive:/var/lib/postgresql/wal-archive
+        # 18+ images keep data in /var/lib/postgresql/<major>/docker and refuse
+        # to start if /var/lib/postgresql/data is mounted. The archive directory
+        # is /var/lib/postgresql/wal-archive inside this same mount.
+        - /mnt/pgdata:/var/lib/postgresql
       command:
         - "postgres"
         - "-c"
@@ -667,6 +672,17 @@ runcmd:
         - "ssl=off"
         - "-c"
         - "autovacuum_max_workers=3"
+        # PostgreSQL 19: let autovacuum vacuum a table's indexes in parallel.
+        # Tables opt in with the autovacuum_parallel_workers storage parameter
+        # (kudi's transactions partitions do); 0, the default, disables it.
+        - "-c"
+        - "autovacuum_max_parallel_workers=2"
+        # pg_stat_statements must be preloaded or the extension's view errors;
+        # kudi's monitor.top_queries and the DB metrics collector read it.
+        - "-c"
+        - "shared_preload_libraries=pg_stat_statements"
+        - "-c"
+        - "log_autoanalyze_min_duration=250"   # 19 split this from log_autovacuum_min_duration
         - "-c"
         - "autovacuum_vacuum_scale_factor=0.05"
         - "-c"
@@ -875,6 +891,18 @@ runcmd:
     sleep 2
   done
 
+# --- psql/pg_dump wrapper ---
+# initdb uses --auth-local=scram-sha-256, so even inside the container psql and
+# pg_dump need a password. This passes the container's own POSTGRES_PASSWORD.
+# Usage: /opt/kudi/kudi-pg.sh psql -U kudi -d kudi -c 'SELECT 1'
+- |
+  cat > $APP_DIR/kudi-pg.sh <<'KUDIPG'
+  #!/usr/bin/env bash
+  exec docker compose -f /opt/kudi/docker-compose.yaml exec -T postgres \
+    sh -c 'PGPASSWORD="\$POSTGRES_PASSWORD" exec "\$@"' sh "\$@"
+  KUDIPG
+  chmod 755 $APP_DIR/kudi-pg.sh
+
 # --- Automated PG backup script ---
 - |
   cat > $APP_DIR/backup.sh <<'BACKUP'
@@ -885,7 +913,7 @@ runcmd:
   TIMESTAMP=\$(date +%Y%m%d_%H%M%S)
   BACKUP_FILE="\$BACKUP_DIR/kudi_\$TIMESTAMP.sql.gz"
 
-  docker compose -f /opt/kudi/docker-compose.yaml exec -T postgres \
+  /opt/kudi/kudi-pg.sh \
     pg_dump -U kudi -d kudi --no-owner --no-privileges -Z 6 \
     > "\$BACKUP_FILE"
 
@@ -903,6 +931,13 @@ runcmd:
 # --- Backup cron: daily at 02:00 UTC ---
 - echo '0 2 * * * root /opt/kudi/backup.sh >> /var/log/kudi/backup.log 2>&1' > /etc/cron.d/kudi-backup
 - chmod 644 /etc/cron.d/kudi-backup
+
+# --- Partition maintenance: daily at 01:30 UTC ---
+# Creates kudi's transactions / ledger_entries / audit_log partitions ahead of
+# need (see maintenance.partition_config). Idempotent; without it inserts
+# start failing once the last partition's range has passed.
+- echo '30 1 * * * root /opt/kudi/kudi-pg.sh psql -U kudi -d kudi -v ON_ERROR_STOP=1 -c "SELECT * FROM maintenance.run_partition_maintenance()" >> /var/log/kudi/partitions.log 2>&1' > /etc/cron.d/kudi-partitions
+- chmod 644 /etc/cron.d/kudi-partitions
 
 # --- WAL archive cleanup (keep 7 days) ---
 - echo '0 3 * * * root find /mnt/pgdata/wal-archive -type f -mtime +7 -delete' > /etc/cron.d/kudi-wal-cleanup
@@ -1165,7 +1200,7 @@ check_status() {
         echo
 
         printf "  PG connections:\n"
-        docker compose -f /opt/kudi/docker-compose.yaml exec -T postgres \
+        /opt/kudi/kudi-pg.sh \
             psql -U kudi -d kudi -t -c "SELECT count(*) || ' active' FROM pg_stat_activity WHERE state = 'active'" 2>/dev/null | xargs printf "    %s\n" || echo "    (unavailable)"
         echo
 
@@ -1261,7 +1296,7 @@ create_server() {
 
     echo
     printf "${BOLD}${GREEN}  Kudi Wallet — Hetzner Production Deploy (v%s)${RESET}\n" "$SCRIPT_VERSION"
-    printf "${DIM}  PostgreSQL 18 + OTel + Jaeger + Prometheus + Grafana + JVM${RESET}\n"
+    printf "${DIM}  PostgreSQL 19 + OTel + Jaeger + Prometheus + Grafana + JVM${RESET}\n"
     printf "${DIM}  Environment: %s${RESET}\n" "$KUDI_ENV"
     echo
 

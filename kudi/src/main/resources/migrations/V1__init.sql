@@ -1,8 +1,7 @@
 -- =============================================================================
--- wallet-database.sql — Production-Grade Digital Wallet Database
+-- V1__init.sql — kudi digital wallet schema
 -- =============================================================================
 --
--- A complete digital wallet platform database:
 --   • Double-entry ledger: every money movement = 2 entries that sum to zero
 --   • Multi-currency wallets with exchange rate tracking
 --   • Authentication: credentials, sessions, MFA, refresh tokens, API keys
@@ -11,19 +10,23 @@
 --   • Notifications: templates, per-user preferences, delivery tracking
 --   • Audit: immutable append-only log (UPDATE/DELETE blocked by trigger)
 --   • Row-Level Security: users can only access their own data
---   • Lookup tables: zero enums — all statuses are transactional, evolvable rows
+--   • Lookup tables instead of enums: statuses are rows, evolvable in a transaction
 --   • Column ordering: 8-byte → 4-byte → 2-byte → 1-byte → variable
---   • Partitioned: ledger_entries and audit_log by month/quarter
---   • Idempotency: every mutating operation carries a unique reference_id
---   • Security hardening: role timeouts, REVOKE PUBLIC, schema separation
+--   • Partitioned: transactions and ledger_entries by month, audit_log by
+--     quarter; partitions are created ahead of time by
+--     maintenance.run_partition_maintenance() (see PARTITION MAINTENANCE)
+--   • Idempotency: transaction_references claims each reference_id exactly once
 --
--- PostgreSQL 18 features:
---   • uuidv7()           — time-sortable UUIDs, better B-tree locality
---   • Virtual generated   — computed columns, zero storage
---   • NOT ENFORCED        — documentary constraints, zero runtime cost
---   • MERGE ... RETURNING — atomic upserts with result capture
+-- Schema only. Demo data lives in kudi/sql/demo_seed.sql and the example and
+-- monitoring queries in kudi/sql/queries.sql. Neither belongs here: every file
+-- in this directory runs when a new database is initialised.
 --
--- Target: PostgreSQL 18+
+-- Target: PostgreSQL 19. Relies on:
+--   • INSERT ... ON CONFLICT DO SELECT (19) — atomic claim of an idempotency key
+--   • RETURNING old.* / new.* (18)          — tells a new claim from a replay
+--   • Virtual generated columns (18)        — users.full_name, wallets.available_balance
+--   • NOT ENFORCED constraints (18)         — documentary-only checks
+--   • autovacuum_parallel_workers (19)      — parallel index vacuum on hot partitions
 -- =============================================================================
 
 
@@ -35,7 +38,6 @@ CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE EXTENSION IF NOT EXISTS citext;
-CREATE EXTENSION IF NOT EXISTS btree_gist;        -- GiST operator classes for exclusion constraints
 
 
 -- =============================================================================
@@ -46,6 +48,18 @@ CREATE SCHEMA IF NOT EXISTS auth;         -- credentials, sessions, MFA, API key
 CREATE SCHEMA IF NOT EXISTS core;         -- roles, permissions (RBAC)
 CREATE SCHEMA IF NOT EXISTS notify;       -- notification delivery, preferences
 CREATE SCHEMA IF NOT EXISTS audit;        -- immutable audit trail
+CREATE SCHEMA IF NOT EXISTS maintenance;  -- partition upkeep; owner-only
+
+
+-- =============================================================================
+-- DOMAINS
+-- =============================================================================
+
+-- ISO 4217 codes are three letters, but the platform also carries crypto and
+-- stablecoin codes such as USDT, which a fixed-width 3-character column cannot
+-- hold. One domain defines a valid code for every column that stores one.
+CREATE DOMAIN currency_code AS TEXT
+    CHECK (VALUE ~ '^[A-Z][A-Z0-9]{2,4}$');
 
 
 -- =============================================================================
@@ -202,7 +216,7 @@ INSERT INTO ledger_entry_types (type_id, code, display_name) VALUES
 
 
 CREATE TABLE currencies (
-    currency_code   CHAR(3)     PRIMARY KEY,    -- ISO 4217
+    currency_code   currency_code PRIMARY KEY,  -- ISO 4217, plus crypto codes
     display_name    TEXT        NOT NULL,
     symbol          TEXT        NOT NULL,
     decimal_places  SMALLINT   NOT NULL DEFAULT 2,
@@ -375,7 +389,7 @@ CREATE TABLE wallets (
     is_default          BOOL            NOT NULL DEFAULT FALSE,
 
     -- variable-length
-    currency_code       CHAR(3)         NOT NULL REFERENCES currencies(currency_code),
+    currency_code       currency_code   NOT NULL REFERENCES currencies(currency_code),
     wallet_tag          TEXT,           -- user-friendly label: "My USD", "Savings"
     metadata            JSONB           NOT NULL DEFAULT '{}',
 
@@ -412,7 +426,7 @@ CREATE TABLE payment_methods (
     is_default          BOOL            NOT NULL DEFAULT FALSE,
 
     -- variable-length
-    currency_code       CHAR(3)         NOT NULL REFERENCES currencies(currency_code),
+    currency_code       currency_code   NOT NULL REFERENCES currencies(currency_code),
     provider            TEXT            NOT NULL,    -- 'stripe', 'paystack', 'flutterwave'
     label               TEXT,                        -- "GTBank ****4521"
     token               TEXT            NOT NULL,    -- tokenized by payment provider
@@ -458,8 +472,8 @@ CREATE TABLE merchants (
 CREATE TABLE transactions (
     -- 8-byte aligned
     txn_id              BIGINT GENERATED ALWAYS AS IDENTITY,
-    source_wallet_id    BIGINT,                     -- NULL for top-ups from external
-    dest_wallet_id      BIGINT,                     -- NULL for withdrawals to external
+    source_wallet_id    BIGINT          REFERENCES wallets(wallet_id),   -- NULL for top-ups from external
+    dest_wallet_id      BIGINT          REFERENCES wallets(wallet_id),   -- NULL for withdrawals to external
     amount              NUMERIC(18,4)   NOT NULL,
     fee_amount          NUMERIC(18,4)   NOT NULL DEFAULT 0,
     exchange_rate       NUMERIC(18,8),              -- non-NULL for FX transactions
@@ -467,9 +481,7 @@ CREATE TABLE transactions (
     created_at          TIMESTAMPTZ     NOT NULL DEFAULT now(),
     completed_at        TIMESTAMPTZ,
     expires_at          TIMESTAMPTZ,                -- pending txns auto-expire
-
-    -- 4-byte aligned
-    merchant_id         BIGINT,                     -- non-NULL for payments
+    merchant_id         BIGINT          REFERENCES merchants(merchant_id),  -- non-NULL for payments
     related_txn_id      BIGINT,                     -- links refund → original, fee → parent
 
     -- 2-byte aligned
@@ -480,47 +492,29 @@ CREATE TABLE transactions (
     is_suspicious       BOOL            NOT NULL DEFAULT FALSE,
 
     -- variable-length
-    source_currency     CHAR(3),
-    dest_currency       CHAR(3),
-    reference_id        TEXT            NOT NULL UNIQUE,     -- idempotency key
+    source_currency     currency_code   REFERENCES currencies(currency_code),
+    dest_currency       currency_code   REFERENCES currencies(currency_code),
+    -- Client idempotency key. Uniqueness is enforced by transaction_references:
+    -- a UNIQUE constraint here would have to include created_at (the partition
+    -- key), and would then no longer stop the same key being used twice.
+    reference_id        TEXT            NOT NULL,
     description         TEXT,
     failure_reason      TEXT,
     ip_address          INET,
     device_fingerprint  TEXT,
     metadata            JSONB           NOT NULL DEFAULT '{}',
 
-    -- PG18 NOT ENFORCED: amount > 0 guaranteed by application layer
-    CONSTRAINT chk_txn_positive CHECK (amount > 0) NOT ENFORCED,
-    CONSTRAINT chk_txn_fee      CHECK (fee_amount >= 0) NOT ENFORCED,
+    -- Enforced: these guard money, and a CHECK costs next to nothing per row.
+    CONSTRAINT chk_txn_positive   CHECK (amount > 0),
+    CONSTRAINT chk_txn_fee        CHECK (fee_amount >= 0),
+    CONSTRAINT chk_txn_has_wallet CHECK (source_wallet_id IS NOT NULL OR dest_wallet_id IS NOT NULL),
 
     PRIMARY KEY (txn_id, created_at)
 ) PARTITION BY RANGE (created_at);
 
--- Monthly partitions: 2025-01 through 2026-06
-CREATE TABLE transactions_2025_01 PARTITION OF transactions FOR VALUES FROM ('2025-01-01') TO ('2025-02-01');
-CREATE TABLE transactions_2025_02 PARTITION OF transactions FOR VALUES FROM ('2025-02-01') TO ('2025-03-01');
-CREATE TABLE transactions_2025_03 PARTITION OF transactions FOR VALUES FROM ('2025-03-01') TO ('2025-04-01');
-CREATE TABLE transactions_2025_04 PARTITION OF transactions FOR VALUES FROM ('2025-04-01') TO ('2025-05-01');
-CREATE TABLE transactions_2025_05 PARTITION OF transactions FOR VALUES FROM ('2025-05-01') TO ('2025-06-01');
-CREATE TABLE transactions_2025_06 PARTITION OF transactions FOR VALUES FROM ('2025-06-01') TO ('2025-07-01');
-CREATE TABLE transactions_2025_07 PARTITION OF transactions FOR VALUES FROM ('2025-07-01') TO ('2025-08-01');
-CREATE TABLE transactions_2025_08 PARTITION OF transactions FOR VALUES FROM ('2025-08-01') TO ('2025-09-01');
-CREATE TABLE transactions_2025_09 PARTITION OF transactions FOR VALUES FROM ('2025-09-01') TO ('2025-10-01');
-CREATE TABLE transactions_2025_10 PARTITION OF transactions FOR VALUES FROM ('2025-10-01') TO ('2025-11-01');
-CREATE TABLE transactions_2025_11 PARTITION OF transactions FOR VALUES FROM ('2025-11-01') TO ('2025-12-01');
-CREATE TABLE transactions_2025_12 PARTITION OF transactions FOR VALUES FROM ('2025-12-01') TO ('2026-01-01');
-CREATE TABLE transactions_2026_01 PARTITION OF transactions FOR VALUES FROM ('2026-01-01') TO ('2026-02-01');
-CREATE TABLE transactions_2026_02 PARTITION OF transactions FOR VALUES FROM ('2026-02-01') TO ('2026-03-01');
-CREATE TABLE transactions_2026_03 PARTITION OF transactions FOR VALUES FROM ('2026-03-01') TO ('2026-04-01');
-CREATE TABLE transactions_2026_04 PARTITION OF transactions FOR VALUES FROM ('2026-04-01') TO ('2026-05-01');
-CREATE TABLE transactions_2026_05 PARTITION OF transactions FOR VALUES FROM ('2026-05-01') TO ('2026-06-01');
-CREATE TABLE transactions_2026_06 PARTITION OF transactions FOR VALUES FROM ('2026-06-01') TO ('2026-07-01');
-
-ALTER TABLE transactions SET (
-    autovacuum_vacuum_scale_factor = 0.005,
-    autovacuum_analyze_scale_factor = 0.002,
-    autovacuum_vacuum_cost_delay = 2
-);
+-- Partitions are created by maintenance.run_partition_maintenance() below.
+-- Autovacuum settings live in maintenance.partition_config: PostgreSQL rejects
+-- storage parameters on a partitioned parent, so they are set per partition.
 
 
 -- ---------------------------------------------------------------------------
@@ -535,7 +529,7 @@ CREATE TABLE ledger_entries (
     entry_id            BIGINT GENERATED ALWAYS AS IDENTITY,
     txn_id              BIGINT          NOT NULL,
     txn_created_at      TIMESTAMPTZ     NOT NULL,
-    wallet_id           BIGINT          NOT NULL,
+    wallet_id           BIGINT          NOT NULL REFERENCES wallets(wallet_id),
     amount              NUMERIC(18,4)   NOT NULL,   -- positive = credit, negative = debit
     balance_after       NUMERIC(18,4)   NOT NULL,
     created_at          TIMESTAMPTZ     NOT NULL DEFAULT now(),
@@ -544,35 +538,40 @@ CREATE TABLE ledger_entries (
     entry_type_id       SMALLINT        NOT NULL REFERENCES ledger_entry_types(type_id),
 
     -- variable-length
-    currency_code       CHAR(3)         NOT NULL,
+    currency_code       currency_code   NOT NULL REFERENCES currencies(currency_code),
     description         TEXT,
     metadata            JSONB           NOT NULL DEFAULT '{}',
 
-    PRIMARY KEY (entry_id, created_at)
+    PRIMARY KEY (entry_id, created_at),
+
+    -- Every entry belongs to a real transaction. PostgreSQL 19 made foreign key
+    -- checks considerably cheaper, which matters on the hottest insert path.
+    FOREIGN KEY (txn_id, txn_created_at) REFERENCES transactions (txn_id, created_at),
+
+    CONSTRAINT chk_ledger_nonzero CHECK (amount <> 0)
 ) PARTITION BY RANGE (created_at);
 
-CREATE TABLE ledger_entries_2025_01 PARTITION OF ledger_entries FOR VALUES FROM ('2025-01-01') TO ('2025-02-01');
-CREATE TABLE ledger_entries_2025_02 PARTITION OF ledger_entries FOR VALUES FROM ('2025-02-01') TO ('2025-03-01');
-CREATE TABLE ledger_entries_2025_03 PARTITION OF ledger_entries FOR VALUES FROM ('2025-03-01') TO ('2025-04-01');
-CREATE TABLE ledger_entries_2025_04 PARTITION OF ledger_entries FOR VALUES FROM ('2025-04-01') TO ('2025-05-01');
-CREATE TABLE ledger_entries_2025_05 PARTITION OF ledger_entries FOR VALUES FROM ('2025-05-01') TO ('2025-06-01');
-CREATE TABLE ledger_entries_2025_06 PARTITION OF ledger_entries FOR VALUES FROM ('2025-06-01') TO ('2025-07-01');
-CREATE TABLE ledger_entries_2025_07 PARTITION OF ledger_entries FOR VALUES FROM ('2025-07-01') TO ('2025-08-01');
-CREATE TABLE ledger_entries_2025_08 PARTITION OF ledger_entries FOR VALUES FROM ('2025-08-01') TO ('2025-09-01');
-CREATE TABLE ledger_entries_2025_09 PARTITION OF ledger_entries FOR VALUES FROM ('2025-09-01') TO ('2025-10-01');
-CREATE TABLE ledger_entries_2025_10 PARTITION OF ledger_entries FOR VALUES FROM ('2025-10-01') TO ('2025-11-01');
-CREATE TABLE ledger_entries_2025_11 PARTITION OF ledger_entries FOR VALUES FROM ('2025-11-01') TO ('2025-12-01');
-CREATE TABLE ledger_entries_2025_12 PARTITION OF ledger_entries FOR VALUES FROM ('2025-12-01') TO ('2026-01-01');
-CREATE TABLE ledger_entries_2026_01 PARTITION OF ledger_entries FOR VALUES FROM ('2026-01-01') TO ('2026-02-01');
-CREATE TABLE ledger_entries_2026_02 PARTITION OF ledger_entries FOR VALUES FROM ('2026-02-01') TO ('2026-03-01');
-CREATE TABLE ledger_entries_2026_03 PARTITION OF ledger_entries FOR VALUES FROM ('2026-03-01') TO ('2026-04-01');
-CREATE TABLE ledger_entries_2026_04 PARTITION OF ledger_entries FOR VALUES FROM ('2026-04-01') TO ('2026-05-01');
-CREATE TABLE ledger_entries_2026_05 PARTITION OF ledger_entries FOR VALUES FROM ('2026-05-01') TO ('2026-06-01');
-CREATE TABLE ledger_entries_2026_06 PARTITION OF ledger_entries FOR VALUES FROM ('2026-06-01') TO ('2026-07-01');
 
-ALTER TABLE ledger_entries SET (
-    autovacuum_vacuum_scale_factor = 0.005,
-    autovacuum_analyze_scale_factor = 0.002
+-- ---------------------------------------------------------------------------
+-- 6b. TRANSACTION_REFERENCES  — One row per idempotency key
+-- ---------------------------------------------------------------------------
+-- Not partitioned, so the primary key is global. A request claims its key with
+--   INSERT ... ON CONFLICT (reference_id) DO SELECT FOR UPDATE
+--   RETURNING ..., old.reference_id IS NULL AS claimed
+-- in the same database transaction that moves the money. A concurrent request
+-- with the same key waits on the row lock, then sees txn_id set and replays
+-- the original result instead of moving the money twice. If the first request
+-- rolls back, its claim disappears with it and the waiter claims the key.
+-- ---------------------------------------------------------------------------
+CREATE TABLE transaction_references (
+    reference_id        TEXT            PRIMARY KEY,
+    txn_id              BIGINT,
+    txn_created_at      TIMESTAMPTZ,
+    claimed_at          TIMESTAMPTZ     NOT NULL DEFAULT now(),
+
+    FOREIGN KEY (txn_id, txn_created_at) REFERENCES transactions (txn_id, created_at),
+    CONSTRAINT chk_ref_txn_pair CHECK ((txn_id IS NULL) = (txn_created_at IS NULL)),
+    CONSTRAINT chk_ref_length   CHECK (length(reference_id) BETWEEN 1 AND 255)
 );
 
 
@@ -601,7 +600,7 @@ CREATE TABLE fee_schedule (
     is_active           BOOL            NOT NULL DEFAULT TRUE,
 
     -- variable-length
-    currency_code       CHAR(3)         NOT NULL REFERENCES currencies(currency_code),
+    currency_code       currency_code   NOT NULL REFERENCES currencies(currency_code),
     description         TEXT,
     metadata            JSONB           NOT NULL DEFAULT '{}'
 );
@@ -619,8 +618,8 @@ CREATE TABLE exchange_rates (
     captured_at         TIMESTAMPTZ     NOT NULL DEFAULT now(),
 
     -- variable-length
-    base_currency       CHAR(3)         NOT NULL REFERENCES currencies(currency_code),
-    quote_currency      CHAR(3)         NOT NULL REFERENCES currencies(currency_code),
+    base_currency       currency_code   NOT NULL REFERENCES currencies(currency_code),
+    quote_currency      currency_code   NOT NULL REFERENCES currencies(currency_code),
     source              TEXT            NOT NULL DEFAULT 'internal',  -- 'ecb', 'openexchange', etc.
     metadata            JSONB           NOT NULL DEFAULT '{}'
 );
@@ -670,12 +669,128 @@ CREATE TABLE audit_log (
     PRIMARY KEY (log_id, created_at)
 ) PARTITION BY RANGE (created_at);
 
-CREATE TABLE audit_log_2025_q1 PARTITION OF audit_log FOR VALUES FROM ('2025-01-01') TO ('2025-04-01');
-CREATE TABLE audit_log_2025_q2 PARTITION OF audit_log FOR VALUES FROM ('2025-04-01') TO ('2025-07-01');
-CREATE TABLE audit_log_2025_q3 PARTITION OF audit_log FOR VALUES FROM ('2025-07-01') TO ('2025-10-01');
-CREATE TABLE audit_log_2025_q4 PARTITION OF audit_log FOR VALUES FROM ('2025-10-01') TO ('2026-01-01');
-CREATE TABLE audit_log_2026_q1 PARTITION OF audit_log FOR VALUES FROM ('2026-01-01') TO ('2026-04-01');
-CREATE TABLE audit_log_2026_q2 PARTITION OF audit_log FOR VALUES FROM ('2026-04-01') TO ('2026-07-01');
+-- Quarterly partitions are created by maintenance.run_partition_maintenance().
+
+
+-- =============================================================================
+-- =============================================================================
+--
+--  P A R T I T I O N   M A I N T E N A N C E
+--
+--  Hard-coded partitions run out: the original list ended in July 2026, after
+--  which every insert into transactions would have failed. Instead, each
+--  partitioned table is registered here and partitions are created ahead of
+--  need. deploy/hetzner.sh schedules maintenance.run_partition_maintenance()
+--  daily; it is idempotent and only ever creates partitions.
+--
+-- =============================================================================
+-- =============================================================================
+
+CREATE TABLE maintenance.partition_config (
+    parent          REGCLASS    PRIMARY KEY,
+    step            INTERVAL    NOT NULL CHECK (step IN ('1 month', '3 months')),
+    premake         INTERVAL    NOT NULL DEFAULT '3 months',  -- how far ahead to create
+    -- Storage parameters for each new partition, since partitioned parents
+    -- cannot carry them. autovacuum_parallel_workers is new in PostgreSQL 19
+    -- and only takes effect when the server's autovacuum_max_parallel_workers > 0.
+    reloptions      TEXT[]      NOT NULL DEFAULT '{}'
+);
+
+-- Creates the missing partitions of p_parent from p_from (default: the
+-- current period) up to now() + premake. Partition bounds are UTC.
+CREATE OR REPLACE FUNCTION maintenance.create_partitions(
+    p_parent REGCLASS,
+    p_from   TIMESTAMPTZ DEFAULT NULL
+)
+RETURNS INT
+LANGUAGE plpgsql
+SET search_path = pg_catalog
+AS $$
+DECLARE
+    cfg       maintenance.partition_config%ROWTYPE;
+    v_schema  TEXT;
+    v_table   TEXT;
+    v_part    TEXT;
+    v_start   TIMESTAMP;   -- UTC wall-clock
+    v_end     TIMESTAMP;
+    v_until   TIMESTAMP;
+    v_created INT := 0;
+BEGIN
+    SELECT * INTO STRICT cfg FROM maintenance.partition_config WHERE parent = p_parent;
+    SELECT n.nspname, c.relname INTO STRICT v_schema, v_table
+    FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE c.oid = p_parent;
+
+    v_start := date_trunc(CASE cfg.step WHEN '1 month' THEN 'month' ELSE 'quarter' END,
+                          coalesce(p_from, now()) AT TIME ZONE 'UTC');
+    v_until := (now() + cfg.premake) AT TIME ZONE 'UTC';
+
+    WHILE v_start < v_until LOOP
+        v_end  := v_start + cfg.step;
+        v_part := format('%s_%s', v_table, to_char(v_start, 'YYYY_MM'));
+
+        IF to_regclass(format('%I.%I', v_schema, v_part)) IS NULL THEN
+            EXECUTE format('CREATE TABLE %I.%I PARTITION OF %s FOR VALUES FROM (%L) TO (%L)',
+                           v_schema, v_part, p_parent,
+                           v_start AT TIME ZONE 'UTC', v_end AT TIME ZONE 'UTC');
+            IF cardinality(cfg.reloptions) > 0 THEN
+                EXECUTE format('ALTER TABLE %I.%I SET (%s)',
+                               v_schema, v_part, array_to_string(cfg.reloptions, ', '));
+            END IF;
+            v_created := v_created + 1;
+        END IF;
+        v_start := v_end;
+    END LOOP;
+
+    RETURN v_created;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION maintenance.run_partition_maintenance()
+RETURNS TABLE (parent REGCLASS, partitions_created INT)
+LANGUAGE sql
+SET search_path = pg_catalog
+AS $$
+    SELECT c.parent, maintenance.create_partitions(c.parent)
+    FROM maintenance.partition_config c
+    ORDER BY c.parent::TEXT;
+$$;
+
+-- How long until each table runs out of partitions. Alert well before zero.
+CREATE OR REPLACE VIEW maintenance.v_partition_runway AS
+SELECT
+    c.parent,
+    max(b.upper_bound)         AS covered_until,
+    max(b.upper_bound) - now() AS runway
+FROM maintenance.partition_config c
+JOIN pg_inherits i ON i.inhparent = c.parent
+JOIN pg_class p ON p.oid = i.inhrelid
+CROSS JOIN LATERAL (
+    SELECT (regexp_match(pg_get_expr(p.relpartbound, p.oid), 'TO \(''([^'']+)''\)'))[1]::TIMESTAMPTZ
+) AS b(upper_bound)
+GROUP BY c.parent;
+
+INSERT INTO maintenance.partition_config (parent, step, premake, reloptions) VALUES
+    ('transactions',   '1 month',  '3 months', ARRAY[
+        'autovacuum_vacuum_scale_factor = 0.005',
+        'autovacuum_analyze_scale_factor = 0.002',
+        'autovacuum_vacuum_cost_delay = 2',
+        'autovacuum_parallel_workers = 2'           -- 8 indexes: vacuum them in parallel
+    ]),
+    ('ledger_entries', '1 month',  '3 months', ARRAY[
+        'autovacuum_vacuum_scale_factor = 0.005',
+        'autovacuum_analyze_scale_factor = 0.002',
+        -- Append-only: vacuum on inserts often enough to keep the visibility
+        -- map current, so statement reads stay index-only.
+        'autovacuum_vacuum_insert_scale_factor = 0.02'
+    ]),
+    ('audit_log',      '3 months', '6 months', ARRAY[
+        'autovacuum_vacuum_insert_scale_factor = 0.05'
+    ]);
+
+SELECT * FROM maintenance.run_partition_maintenance();
+
+REVOKE ALL ON SCHEMA maintenance FROM PUBLIC;
 
 
 -- =============================================================================
@@ -1114,6 +1229,18 @@ GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA auth TO wallet_app;
 GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA core TO wallet_app;
 GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA notify TO wallet_app;
 GRANT SELECT, INSERT ON audit_log TO wallet_app;
+-- wallet_app has RLS policies on these tables, which do nothing without privileges.
+GRANT SELECT ON
+    kyc_statuses, wallet_types, wallet_statuses, txn_types, txn_statuses,
+    payment_method_types, payment_method_statuses, ledger_entry_types, currencies,
+    fee_types, mfa_method_types, notification_channels, delivery_statuses,
+    session_revoke_reasons, fee_schedule, exchange_rates, merchants
+    TO wallet_app, wallet_readonly;
+GRANT SELECT, INSERT, UPDATE ON
+    users, wallets, payment_methods, transactions, transaction_references,
+    notifications, kyc_documents
+    TO wallet_app;
+GRANT SELECT, INSERT ON ledger_entries TO wallet_app;   -- the ledger is append-only
 
 -- wallet_readonly: read-only for dashboards/analytics
 GRANT SELECT ON ALL TABLES IN SCHEMA core TO wallet_readonly;
@@ -1123,6 +1250,7 @@ GRANT SELECT ON audit_log TO wallet_readonly;
 GRANT USAGE ON ALL SEQUENCES IN SCHEMA auth TO wallet_app;
 GRANT USAGE ON ALL SEQUENCES IN SCHEMA core TO wallet_app;
 GRANT USAGE ON ALL SEQUENCES IN SCHEMA notify TO wallet_app;
+GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO wallet_app;
 
 -- ---------------------------------------------------------------------------
 -- RLS POLICIES
@@ -1230,7 +1358,9 @@ ALTER ROLE wallet_app SET idle_in_transaction_session_timeout = '60s';
 
 
 -- ---------------------------------------------------------------------------
--- Password verification with constant-time defence + brute-force lockout
+-- Password verification with constant-time defence + brute-force lockout.
+-- SECURITY DEFINER with a fixed search_path: without it a caller could put
+-- their own crypt() or users table ahead of ours.
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION auth.verify_password(
     p_email    CITEXT,
@@ -1277,7 +1407,8 @@ BEGIN
         RETURN QUERY SELECT v_user.user_id, FALSE, (v_user.failed_login_count + 1 >= 5);
     END IF;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = public, pg_temp;
 
 
 -- ---------------------------------------------------------------------------
@@ -1410,6 +1541,7 @@ FROM auth.login_attempts
 WHERE created_at > now() - INTERVAL '1 hour';
 
 -- Blocked queries
+-- pg_blocking_pids() is exact and much cheaper than self-joining pg_locks.
 CREATE OR REPLACE VIEW v_blocked_queries AS
 SELECT
     blocked.pid       AS blocked_pid,
@@ -1419,20 +1551,8 @@ SELECT
     blocker.query     AS blocker_query,
     blocker.state     AS blocker_state
 FROM pg_stat_activity blocked
-JOIN pg_locks bl ON bl.pid = blocked.pid AND NOT bl.granted
-JOIN pg_locks gl ON gl.locktype = bl.locktype
-    AND gl.database IS NOT DISTINCT FROM bl.database
-    AND gl.relation IS NOT DISTINCT FROM bl.relation
-    AND gl.page IS NOT DISTINCT FROM bl.page
-    AND gl.tuple IS NOT DISTINCT FROM bl.tuple
-    AND gl.virtualxid IS NOT DISTINCT FROM bl.virtualxid
-    AND gl.transactionid IS NOT DISTINCT FROM bl.transactionid
-    AND gl.classid IS NOT DISTINCT FROM bl.classid
-    AND gl.objid IS NOT DISTINCT FROM bl.objid
-    AND gl.objsubid IS NOT DISTINCT FROM bl.objsubid
-    AND gl.pid != bl.pid
-    AND gl.granted
-JOIN pg_stat_activity blocker ON blocker.pid = gl.pid;
+CROSS JOIN LATERAL unnest(pg_blocking_pids(blocked.pid)) AS b(pid)
+JOIN pg_stat_activity blocker ON blocker.pid = b.pid;
 
 -- Long-running transactions
 CREATE OR REPLACE VIEW v_long_transactions AS
@@ -1475,16 +1595,22 @@ COMMENT ON TABLE auth.sessions IS 'Server-side session store for JWT revocation 
 COMMENT ON TABLE audit_log IS 'Append-only audit log. UPDATE/DELETE blocked by trigger.';
 COMMENT ON TABLE ledger_entries IS 'Double-entry ledger. Every debit has a matching credit. Sum must always balance.';
 COMMENT ON TABLE wallets IS 'User wallets. balance is denormalized — ledger_entries is the source of truth.';
-COMMENT ON TABLE transactions IS 'Partitioned by month. reference_id enforces idempotency.';
+COMMENT ON TABLE transactions IS 'Partitioned by month; see maintenance.partition_config. Idempotency is enforced by transaction_references.';
+COMMENT ON TABLE transaction_references IS 'One row per client idempotency key; claimed with INSERT ... ON CONFLICT DO SELECT FOR UPDATE.';
 
 COMMENT ON FUNCTION auth.verify_password IS 'Constant-time password verification with brute-force lockout. SECURITY DEFINER.';
 COMMENT ON FUNCTION auth.create_session IS 'Creates a session with auto-eviction of oldest when at max concurrent limit.';
 COMMENT ON FUNCTION auth.revoke_all_sessions IS 'Revokes all active sessions for a user, used on password change.';
+
+
+-- =============================================================================
 -- INDEXES
 -- =============================================================================
 
 -- USERS -------------------------------------------------------------------
-CREATE INDEX idx_user_name_trgm ON users USING GIN (full_name gin_trgm_ops);
+-- Indexes on virtual generated columns are not supported; index the expression
+-- full_name expands to instead. Queries on full_name use it.
+CREATE INDEX idx_user_name_trgm ON users USING GIN ((first_name || ' ' || last_name) gin_trgm_ops);
 CREATE INDEX idx_user_kyc_pending ON users (created_at DESC) WHERE kyc_status_id = 2;
 CREATE INDEX idx_user_high_risk ON users (risk_score DESC) WHERE risk_score > 700;
 
@@ -1501,7 +1627,6 @@ CREATE INDEX idx_txn_dest   ON transactions (dest_wallet_id, created_at DESC);
 CREATE INDEX idx_txn_pending ON transactions (created_at) WHERE status_id = 1;
 CREATE INDEX idx_txn_suspicious ON transactions (created_at DESC) WHERE is_suspicious = TRUE;
 CREATE INDEX idx_txn_merchant ON transactions (merchant_id, created_at DESC) WHERE merchant_id IS NOT NULL;
-CREATE INDEX idx_txn_reference ON transactions (reference_id);
 CREATE INDEX idx_txn_brin ON transactions USING BRIN (created_at) WITH (pages_per_range = 32);
 
 -- LEDGER_ENTRIES ----------------------------------------------------------
@@ -1530,579 +1655,3 @@ CREATE INDEX idx_login_recent ON auth.login_attempts (created_at DESC) WHERE NOT
 
 -- NOTIFICATIONS -----------------------------------------------------------
 CREATE INDEX idx_notif_delivery ON notifications (created_at) WHERE is_read = FALSE;
-
-
--- =============================================================================
--- =============================================================================
---
---  S E E D   D A T A
---
--- =============================================================================
--- =============================================================================
-
-
--- Users
-INSERT INTO users (email, phone, first_name, last_name, country_code, kyc_status_id, password_hash, risk_score, date_of_birth, mfa_enabled)
-SELECT
-    'user' || g || '@wallet.io',
-    '+234' || LPAD((8000000 + g)::TEXT, 10, '0'),
-    (ARRAY['Adebayo','Chinwe','Kwame','Fatima','Oluwaseun','Amara','Kofi','Zainab','Emeka','Ngozi'])[floor(random()*10+1)::INT],
-    (ARRAY['Okafor','Adeyemi','Mensah','Ibrahim','Ogunleye','Diallo','Asante','Mohammed','Nwosu','Eze'])[floor(random()*10+1)::INT],
-    (ARRAY['NG','GH','KE','ZA','US','GB','SG'])[floor(random()*7+1)::INT],
-    (ARRAY[1,2,4,4,4,4])[floor(random()*6+1)::INT],   -- mostly verified
-    crypt('wallet_pass_' || g, gen_salt('bf', 8)),
-    (random() * 300)::INT,
-    '1970-01-01'::DATE + (random() * 18000)::INT,
-    random() < 0.6
-FROM generate_series(1, 10000) g;
-
--- Wallets (1–3 per user, multi-currency)
-INSERT INTO wallets (user_id, balance, hold_amount, lifetime_in, lifetime_out, currency_code, wallet_type_id, status_id, is_default, daily_limit, monthly_limit)
-SELECT
-    u.user_id,
-    round((random() * 500000 + 100)::NUMERIC, 4),
-    round((random() * 1000)::NUMERIC, 4),
-    round((random() * 2000000)::NUMERIC, 4),
-    round((random() * 1500000)::NUMERIC, 4),
-    c.currency_code,
-    1,   -- personal
-    CASE WHEN u.kyc_status_id = 4 THEN 2 ELSE 1 END,   -- active if KYC verified
-    c.rn = 1,
-    CASE WHEN c.currency_code = 'USD' THEN 5000 WHEN c.currency_code = 'NGN' THEN 5000000 ELSE 5000 END,
-    CASE WHEN c.currency_code = 'USD' THEN 50000 WHEN c.currency_code = 'NGN' THEN 50000000 ELSE 50000 END
-FROM users u
-CROSS JOIN LATERAL (
-    SELECT currency_code, ROW_NUMBER() OVER () AS rn
-    FROM (
-        SELECT unnest(ARRAY['NGN','USD','GBP']) AS currency_code
-        ORDER BY random()
-        LIMIT 1 + (random()*2)::INT
-    ) sub
-) c;
-
--- System fee wallet
-INSERT INTO wallets (user_id, balance, currency_code, wallet_type_id, status_id, is_default)
-SELECT 1, 0, currency_code, 4, 2, FALSE
-FROM currencies WHERE is_active AND currency_code IN ('NGN','USD','GBP');
-
--- Payment methods
-INSERT INTO payment_methods (user_id, type_id, status_id, currency_code, provider, label, token, last_four, bank_name, is_default)
-SELECT
-    u.user_id,
-    (ARRAY[1,1,2,2,3])[floor(random()*5+1)::INT],
-    2,   -- verified
-    (ARRAY['NGN','USD','GBP'])[floor(random()*3+1)::INT],
-    (ARRAY['paystack','flutterwave','stripe'])[floor(random()*3+1)::INT],
-    'Account ****' || LPAD((random()*9999)::INT::TEXT, 4, '0'),
-    'tok_' || uuidv7(),
-    LPAD((random()*9999)::INT::TEXT, 4, '0'),
-    (ARRAY['GTBank','Access Bank','First Bank','UBA','Zenith Bank',NULL,NULL])[floor(random()*7+1)::INT],
-    TRUE
-FROM users u
-WHERE u.kyc_status_id = 4
-  AND random() < 0.7;
-
--- Merchants
-INSERT INTO merchants (name, category, fee_rate_bps, api_key_hash, is_verified, webhook_url)
-SELECT
-    (ARRAY['QuickMart','PayElectric','RideNow','FoodDash','SchoolPay','AirTop','DrugStore','StreamFlix'])[g],
-    (ARRAY['groceries','utilities','transport','food','education','airtime','health','entertainment'])[g],
-    (ARRAY[150, 100, 200, 175, 120, 80, 150, 180])[g],
-    crypt('merchant_key_' || g, gen_salt('bf', 4)),
-    TRUE,
-    'https://merchant' || g || '.example.com/webhook'
-FROM generate_series(1, 8) g;
-
--- Transactions
-INSERT INTO transactions (
-    source_wallet_id, dest_wallet_id, amount, fee_amount,
-    txn_type_id, status_id, source_currency,
-    reference_id, description, created_at, is_suspicious, ip_address
-)
-SELECT
-    w.wallet_id,
-    NULL,
-    round((random() * 50000 + 100)::NUMERIC, 4),
-    round((random() * 100)::NUMERIC, 4),
-    (ARRAY[1,2,3,5,7])[floor(random()*5+1)::INT],                              -- top_up, withdrawal, p2p_send, payment, fee
-    (ARRAY[3,3,3,3,1,4])[floor(random()*6+1)::INT],                            -- mostly completed
-    w.currency_code,
-    'TXN-' || uuidv7(),
-    'Wallet transaction',
-    '2025-01-01'::TIMESTAMPTZ + (random() * 460 || ' days')::INTERVAL,
-    random() < 0.005,
-    ('10.' || (random()*255)::INT || '.' || (random()*255)::INT || '.' || (random()*255)::INT)::INET
-FROM wallets w
-CROSS JOIN LATERAL generate_series(1, 10 + (random()*30)::INT) AS g
-WHERE w.wallet_type_id = 1;
-
--- Ledger entries (2 per transaction: debit source, credit dest or system)
-INSERT INTO ledger_entries (txn_id, txn_created_at, wallet_id, amount, balance_after, entry_type_id, currency_code, created_at)
-SELECT
-    t.txn_id,
-    t.created_at,
-    t.source_wallet_id,
-    -t.amount,                                      -- debit
-    round((random() * 500000)::NUMERIC, 4),
-    1,                                               -- debit type
-    t.source_currency,
-    t.created_at
-FROM transactions t
-WHERE t.source_wallet_id IS NOT NULL AND t.status_id = 3;
-
--- Notifications
-INSERT INTO notifications (user_id, channel, title, body, created_at, is_read)
-SELECT
-    u.user_id,
-    (ARRAY['push','sms','email','in_app'])[floor(random()*4+1)::INT],
-    (ARRAY['Transfer Successful','Top-Up Complete','Payment Received','Security Alert','Low Balance'])[floor(random()*5+1)::INT],
-    'Your wallet has been updated.',
-    '2025-01-01'::TIMESTAMPTZ + (random() * 460 || ' days')::INTERVAL,
-    random() < 0.7
-FROM users u
-CROSS JOIN LATERAL generate_series(1, 3 + (random()*10)::INT) AS g;
-
--- Audit log
-INSERT INTO audit_log (actor_id, action, entity_type, entity_id, ip_address, new_values, created_at)
-SELECT
-    u.user_id,
-    (ARRAY['wallet.create','wallet.top_up','p2p.send','kyc.verify','login.success','pin.change','mfa.enable'])[floor(random()*7+1)::INT],
-    'user',
-    u.user_id::TEXT,
-    ('10.' || (random()*255)::INT || '.' || (random()*255)::INT || '.' || (random()*255)::INT)::INET,
-    jsonb_build_object('status', 'ok'),
-    '2025-01-01'::TIMESTAMPTZ + (random() * 460 || ' days')::INTERVAL
-FROM users u
-CROSS JOIN LATERAL generate_series(1, 5 + (random()*10)::INT) AS g;
-
--- Exchange rates (daily snapshots for 460 days)
-INSERT INTO exchange_rates (base_currency, quote_currency, rate, inverse_rate, spread_bps, captured_at, source)
-SELECT
-    'USD', 'NGN',
-    round((1500 + random() * 200)::NUMERIC, 4),
-    round((1.0 / (1500 + random() * 200))::NUMERIC, 8),
-    50,
-    '2025-01-01'::TIMESTAMPTZ + (g || ' days')::INTERVAL,
-    'ecb'
-FROM generate_series(0, 460) g;
-
-INSERT INTO exchange_rates (base_currency, quote_currency, rate, inverse_rate, spread_bps, captured_at, source)
-SELECT
-    'USD', 'GBP',
-    round((0.78 + random() * 0.05)::NUMERIC, 4),
-    round((1.0 / (0.78 + random() * 0.05))::NUMERIC, 8),
-    30,
-    '2025-01-01'::TIMESTAMPTZ + (g || ' days')::INTERVAL,
-    'ecb'
-FROM generate_series(0, 460) g;
-
--- Fee schedule
-INSERT INTO fee_schedule (fee_type_id, txn_type_id, currency_code, flat_fee, percentage_bps, min_fee, max_fee, description)
-VALUES
-    (1, 1, 'NGN', 0,      100,  50,     5000,   'Top-up: 1%, min ₦50, max ₦5,000'),
-    (2, 2, 'NGN', 50,     50,   50,     10000,  'Withdrawal: ₦50 + 0.5%, max ₦10,000'),
-    (3, 3, 'NGN', 0,      0,    0,      0,      'P2P: free'),
-    (3, 3, 'USD', 0,      25,   0.25,   5,      'P2P USD: 0.25%, min $0.25, max $5'),
-    (4, 10,'NGN', 0,      150,  100,    NULL,   'FX: 1.5%, min ₦100'),
-    (5, 5, 'NGN', 0,      150,  100,    NULL,   'Payment: 1.5%, min ₦100');
-
-
--- =============================================================================
--- =============================================================================
---
---  Q U E R I E S
---
--- =============================================================================
--- =============================================================================
-
-
--- =============================================================================
--- Q1. WALLET STATEMENT  — Paginated using keyset pagination
--- =============================================================================
-
-SELECT
-    le.entry_id,
-    le.amount,
-    le.balance_after,
-    let.code          AS entry_type,
-    le.currency_code,
-    le.description,
-    le.created_at
-FROM ledger_entries le
-JOIN ledger_entry_types let ON let.type_id = le.entry_type_id
-WHERE le.wallet_id = 42
-  AND le.created_at >= '2025-06-01'
-  AND le.created_at <  '2025-07-01'
-ORDER BY le.created_at DESC
-LIMIT 20;
-
-
--- =============================================================================
--- Q2. DAILY WALLET BALANCE RECONSTRUCTION
--- =============================================================================
-
-WITH daily AS (
-    SELECT
-        wallet_id,
-        created_at::DATE AS day,
-        SUM(amount) AS net_movement,
-        COUNT(*) AS entry_count
-    FROM ledger_entries
-    WHERE wallet_id = 42
-      AND created_at >= '2025-01-01'
-      AND created_at <  '2026-01-01'
-    GROUP BY wallet_id, created_at::DATE
-)
-SELECT
-    day,
-    net_movement,
-    entry_count,
-    SUM(net_movement) OVER (ORDER BY day) AS running_balance,
-    AVG(net_movement) OVER (ORDER BY day ROWS BETWEEN 29 PRECEDING AND CURRENT ROW) AS avg_30d
-FROM daily
-ORDER BY day;
-
-
--- =============================================================================
--- Q3. DOUBLE-ENTRY INTEGRITY CHECK  — Sum of all entries per txn must = 0
--- =============================================================================
-
-SELECT
-    txn_id,
-    txn_created_at,
-    SUM(amount) AS imbalance,
-    COUNT(*)    AS entry_count
-FROM ledger_entries
-WHERE created_at >= now() - INTERVAL '30 days'
-GROUP BY txn_id, txn_created_at
-HAVING SUM(amount) != 0
-ORDER BY ABS(SUM(amount)) DESC;
-
-
--- =============================================================================
--- Q4. FRAUD VELOCITY CHECK  — Rapid-fire transactions per wallet
--- =============================================================================
-
-WITH enriched AS (
-    SELECT
-        t.txn_id,
-        t.source_wallet_id,
-        t.amount,
-        t.created_at,
-        tt.code AS txn_type,
-
-        t.created_at - LAG(t.created_at) OVER w AS time_since_last,
-
-        COUNT(*) OVER (
-            PARTITION BY t.source_wallet_id
-            ORDER BY t.created_at
-            RANGE BETWEEN '1 hour'::INTERVAL PRECEDING AND CURRENT ROW
-        ) AS txns_last_hour,
-
-        SUM(t.amount) OVER (
-            PARTITION BY t.source_wallet_id
-            ORDER BY t.created_at
-            RANGE BETWEEN '24 hours'::INTERVAL PRECEDING AND CURRENT ROW
-        ) AS spend_24h,
-
-        AVG(t.amount) OVER w30 AS avg_amount_30d,
-        STDDEV(t.amount) OVER w30 AS stddev_amount_30d
-
-    FROM transactions t
-    JOIN txn_types tt ON tt.type_id = t.txn_type_id
-    WHERE t.created_at >= now() - INTERVAL '90 days'
-      AND t.source_wallet_id IS NOT NULL
-    WINDOW
-        w   AS (PARTITION BY t.source_wallet_id ORDER BY t.created_at),
-        w30 AS (PARTITION BY t.source_wallet_id ORDER BY t.created_at ROWS BETWEEN 29 PRECEDING AND CURRENT ROW)
-)
-SELECT
-    txn_id,
-    source_wallet_id,
-    amount,
-    txn_type,
-    time_since_last,
-    txns_last_hour,
-    spend_24h,
-    ROUND(avg_amount_30d, 2) AS avg_30d,
-    CASE
-        WHEN txns_last_hour > 10                                THEN 'VELOCITY_SPIKE'
-        WHEN time_since_last < INTERVAL '30 seconds'            THEN 'RAPID_FIRE'
-        WHEN stddev_amount_30d > 0
-             AND amount > avg_amount_30d + 3 * stddev_amount_30d THEN 'AMOUNT_ANOMALY'
-        WHEN spend_24h > 100000                                  THEN 'DAILY_LIMIT_RISK'
-    END AS risk_flag
-FROM enriched
-WHERE txns_last_hour > 5
-   OR time_since_last < INTERVAL '1 minute'
-   OR (stddev_amount_30d > 0 AND amount > avg_amount_30d + 2 * stddev_amount_30d)
-ORDER BY created_at DESC;
-
-
--- =============================================================================
--- Q5. REVENUE DASHBOARD  — Fee revenue by type and month
--- =============================================================================
-
-WITH monthly AS (
-    SELECT
-        DATE_TRUNC('month', t.created_at)::DATE AS month,
-        ft.code AS fee_type,
-        SUM(t.fee_amount) AS fee_revenue,
-        COUNT(*) AS txn_count
-    FROM transactions t
-    JOIN txn_types tt ON tt.type_id = t.txn_type_id
-    JOIN fee_types ft ON ft.code = tt.code || '_fee'
-    WHERE t.status_id = 3
-      AND t.fee_amount > 0
-    GROUP BY DATE_TRUNC('month', t.created_at), ft.code
-)
-SELECT
-    month,
-    fee_type,
-    fee_revenue,
-    txn_count,
-    LAG(fee_revenue) OVER w AS prev_month,
-    ROUND(100.0 * (fee_revenue - LAG(fee_revenue) OVER w)
-          / NULLIF(LAG(fee_revenue) OVER w, 0), 1) AS growth_pct,
-    SUM(fee_revenue) OVER (PARTITION BY fee_type ORDER BY month) AS cumulative
-FROM monthly
-WINDOW w AS (PARTITION BY fee_type ORDER BY month)
-ORDER BY month, fee_type;
-
-
--- =============================================================================
--- Q6. WALLET-TO-WALLET TRANSFER with MERGE ... RETURNING (PG18)
--- =============================================================================
--- Atomic balance update: debit source wallet, capture the result.
--- In a real app this runs inside a transaction with the credit MERGE.
--- =============================================================================
-
--- Step 1: debit source
-/*
-MERGE INTO wallets AS w
-USING (VALUES (42, 1000.0000)) AS input(wallet_id, amount)
-ON w.wallet_id = input.wallet_id
-WHEN MATCHED AND w.balance >= input.amount AND w.status_id = 2 THEN
-    UPDATE SET
-        balance      = w.balance - input.amount,
-        hold_amount  = w.hold_amount,
-        lifetime_out = w.lifetime_out + input.amount
-RETURNING w.wallet_id, w.balance, w.available_balance, 'debited' AS action;
-*/
-
--- Step 2: credit destination
-/*
-MERGE INTO wallets AS w
-USING (VALUES (99, 1000.0000)) AS input(wallet_id, amount)
-ON w.wallet_id = input.wallet_id
-WHEN MATCHED AND w.status_id = 2 THEN
-    UPDATE SET
-        balance     = w.balance + input.amount,
-        lifetime_in = w.lifetime_in + input.amount
-RETURNING w.wallet_id, w.balance, w.available_balance, 'credited' AS action;
-*/
-
-
--- =============================================================================
--- Q7. USER COHORT RETENTION  — Monthly signup cohorts
--- =============================================================================
-
-WITH user_months AS (
-    SELECT DISTINCT
-        w.user_id,
-        DATE_TRUNC('month', t.created_at)::DATE AS active_month
-    FROM transactions t
-    JOIN wallets w ON w.wallet_id = t.source_wallet_id
-    WHERE t.status_id = 3
-),
-cohorted AS (
-    SELECT
-        user_id,
-        active_month,
-        FIRST_VALUE(active_month) OVER (
-            PARTITION BY user_id ORDER BY active_month
-        ) AS cohort_month
-    FROM user_months
-)
-SELECT
-    cohort_month,
-    active_month,
-    (EXTRACT(YEAR FROM age(active_month, cohort_month)) * 12 +
-     EXTRACT(MONTH FROM age(active_month, cohort_month)))::INT AS months_since_join,
-    COUNT(DISTINCT user_id) AS active_users
-FROM cohorted
-GROUP BY cohort_month, active_month
-ORDER BY cohort_month, active_month;
-
-
--- =============================================================================
--- Q8. TOP-UP FUNNEL  — Where do users drop off?
--- =============================================================================
-
-WITH funnel AS (
-    SELECT
-        u.user_id,
-        u.created_at                                                        AS step1_signup,
-        CASE WHEN u.kyc_status_id >= 2 THEN u.created_at END               AS step2_kyc_started,
-        CASE WHEN u.kyc_status_id = 4  THEN u.updated_at END               AS step3_kyc_verified,
-        (SELECT MIN(w.created_at) FROM wallets w
-         WHERE w.user_id = u.user_id)                                       AS step4_wallet_created,
-        (SELECT MIN(pm.created_at) FROM payment_methods pm
-         WHERE pm.user_id = u.user_id AND pm.status_id = 2)                AS step5_pm_linked,
-        (SELECT MIN(t.created_at) FROM transactions t
-         JOIN wallets w ON w.wallet_id = t.dest_wallet_id
-         WHERE w.user_id = u.user_id AND t.txn_type_id = 1)                AS step6_first_top_up
-    FROM users u
-    WHERE u.created_at >= now() - INTERVAL '6 months'
-)
-SELECT
-    COUNT(*)                     AS signups,
-    COUNT(step2_kyc_started)     AS kyc_started,
-    COUNT(step3_kyc_verified)    AS kyc_verified,
-    COUNT(step4_wallet_created)  AS wallet_created,
-    COUNT(step5_pm_linked)       AS pm_linked,
-    COUNT(step6_first_top_up)    AS first_top_up,
-    ROUND(100.0 * COUNT(step6_first_top_up) / NULLIF(COUNT(*), 0), 1) AS overall_conversion_pct
-FROM funnel;
-
-
--- =============================================================================
--- Q9. FX RATE TREND  — 7-day and 30-day moving averages
--- =============================================================================
-
-SELECT
-    captured_at::DATE AS day,
-    rate,
-    ROUND(AVG(rate) OVER (ORDER BY captured_at::DATE ROWS BETWEEN 6  PRECEDING AND CURRENT ROW), 4) AS sma_7d,
-    ROUND(AVG(rate) OVER (ORDER BY captured_at::DATE ROWS BETWEEN 29 PRECEDING AND CURRENT ROW), 4) AS sma_30d,
-    ROUND(rate - LAG(rate) OVER (ORDER BY captured_at::DATE), 4) AS daily_change,
-    ROUND(100.0 * (rate - LAG(rate) OVER (ORDER BY captured_at::DATE))
-          / NULLIF(LAG(rate) OVER (ORDER BY captured_at::DATE), 0), 2) AS daily_change_pct
-FROM exchange_rates
-WHERE base_currency = 'USD'
-  AND quote_currency = 'NGN'
-  AND captured_at >= now() - INTERVAL '120 days'
-ORDER BY day;
-
-
--- =============================================================================
--- Q10. MERCHANT SETTLEMENT SUMMARY  — Revenue per merchant
--- =============================================================================
-
-SELECT
-    m.merchant_id,
-    m.name,
-    m.category,
-    COUNT(*)                    AS txn_count,
-    SUM(t.amount)               AS gross_volume,
-    SUM(t.fee_amount)           AS total_fees,
-    SUM(t.amount - t.fee_amount) AS net_settlement,
-    ROUND(AVG(t.amount), 2)     AS avg_ticket,
-    ROUND(100.0 * SUM(t.fee_amount) / NULLIF(SUM(t.amount), 0), 3) AS effective_fee_pct
-FROM transactions t
-JOIN merchants m ON m.merchant_id = t.merchant_id
-WHERE t.status_id = 3
-  AND t.created_at >= DATE_TRUNC('month', now())
-GROUP BY m.merchant_id, m.name, m.category
-ORDER BY gross_volume DESC;
-
-
--- =============================================================================
--- Q11. DAILY OPERATIONAL DASHBOARD  — Moving averages + anomalies
--- =============================================================================
-
-WITH daily AS (
-    SELECT
-        created_at::DATE AS day,
-        COUNT(*) AS txn_count,
-        SUM(amount) AS volume,
-        SUM(fee_amount) AS fees,
-        COUNT(DISTINCT source_wallet_id) AS active_wallets,
-        COUNT(*) FILTER (WHERE is_suspicious) AS suspicious_count,
-        COUNT(*) FILTER (WHERE status_id = 4) AS failed_count
-    FROM transactions
-    WHERE created_at >= now() - INTERVAL '120 days'
-    GROUP BY created_at::DATE
-)
-SELECT
-    day,
-    txn_count,
-    volume,
-    fees,
-    active_wallets,
-    suspicious_count,
-    failed_count,
-    ROUND(AVG(txn_count) OVER w7, 0)  AS txn_7d_avg,
-    ROUND(AVG(volume)    OVER w7, 2)  AS vol_7d_avg,
-    ROUND(AVG(txn_count) OVER w30, 0) AS txn_30d_avg,
-    ROUND(AVG(volume)    OVER w30, 2) AS vol_30d_avg,
-    txn_count - LAG(txn_count) OVER (ORDER BY day) AS txn_dod
-FROM daily
-WINDOW
-    w7  AS (ORDER BY day ROWS BETWEEN 6  PRECEDING AND CURRENT ROW),
-    w30 AS (ORDER BY day ROWS BETWEEN 29 PRECEDING AND CURRENT ROW)
-ORDER BY day;
-
-
--- =============================================================================
--- =============================================================================
---
---  M O N I T O R I N G
---
--- =============================================================================
--- =============================================================================
-
-
--- M1. Ledger imbalance check (should return 0 rows)
-SELECT txn_id, txn_created_at, SUM(amount) AS imbalance
-FROM ledger_entries
-WHERE created_at >= now() - INTERVAL '24 hours'
-GROUP BY txn_id, txn_created_at
-HAVING SUM(amount) != 0;
-
--- M2. Wallet balance vs ledger reconciliation
-SELECT
-    w.wallet_id,
-    w.balance AS wallet_balance,
-    COALESCE(SUM(le.amount), 0) AS ledger_balance,
-    w.balance - COALESCE(SUM(le.amount), 0) AS drift
-FROM wallets w
-LEFT JOIN ledger_entries le ON le.wallet_id = w.wallet_id
-GROUP BY w.wallet_id, w.balance
-HAVING w.balance != COALESCE(SUM(le.amount), 0)
-LIMIT 50;
-
--- M3. Stuck pending transactions (> 15 min old)
-SELECT txn_id, source_wallet_id, amount, created_at, age(now(), created_at) AS age
-FROM transactions
-WHERE status_id = 1
-  AND created_at < now() - INTERVAL '15 minutes'
-ORDER BY created_at
-LIMIT 50;
-
--- M4. Cache hit ratio
-SELECT ROUND(100.0 * SUM(blks_hit) / NULLIF(SUM(blks_hit + blks_read), 0), 2) AS cache_hit_pct
-FROM pg_stat_database WHERE datname = current_database();
-
--- M5. Table bloat
-SELECT relname, n_live_tup, n_dead_tup,
-       ROUND(100.0 * n_dead_tup / NULLIF(n_live_tup + n_dead_tup, 0), 1) AS dead_pct,
-       last_autovacuum
-FROM pg_stat_user_tables WHERE n_dead_tup > 1000 ORDER BY n_dead_tup DESC;
-
--- M6. Partition sizes
-SELECT c.relname AS partition,
-       pg_size_pretty(pg_total_relation_size(c.oid)) AS total_size,
-       s.n_live_tup
-FROM pg_class c
-JOIN pg_stat_user_tables s ON s.relid = c.oid
-WHERE c.relname LIKE 'transactions_%' OR c.relname LIKE 'ledger_entries_%'
-ORDER BY c.relname;
-
--- M7. Slow queries
-SELECT LEFT(query, 120) AS query_preview, calls,
-       ROUND(mean_exec_time::NUMERIC, 1) AS avg_ms,
-       rows
-FROM pg_stat_statements
-WHERE dbid = (SELECT oid FROM pg_database WHERE datname = current_database())
-ORDER BY mean_exec_time DESC LIMIT 20;

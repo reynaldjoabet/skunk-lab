@@ -45,7 +45,7 @@ object LedgerRepo {
     ] =
       sql"""
         INSERT INTO ledger_entries (txn_id, txn_created_at, wallet_id, amount, balance_after, entry_type_id, currency_code, description)
-        VALUES ($int8, $timestamptz, $int8, $numeric, $numeric, $int2, $bpchar(3), ${text.opt})
+        VALUES ($int8, $timestamptz, $int8, $numeric, $numeric, $int2, $text, ${text.opt})
         RETURNING #$cols
       """.query(ledgerEntry)
 

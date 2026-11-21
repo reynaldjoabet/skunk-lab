@@ -41,25 +41,15 @@ object MeteringService {
             .flatMap {
               case None      => MonadCancelThrow[F].raiseError(NoActiveSubscription(tenantId))
               case Some(sub) =>
+                // A retry with the same payload returns the stored event; the
+                // same key with a different payload is a conflict.
                 usage
                   .record(tenantId, sub.id, req.metric, req.quantity, req.idempotencyKey)
                   .flatMap {
-                    case Some(event) => Recorded(event, created = true).pure[F]
-                    case None        => replay(tenantId, req)
+                    case Some((event, created)) => Recorded(event, created).pure[F]
+                    case None                   =>
+                      MonadCancelThrow[F].raiseError(DuplicateEvent(req.idempotencyKey))
                   }
-            }
-
-        // The key exists already. It is a safe retry only if this tenant
-        // stored the same event under it; a different payload, or a key that
-        // belongs to another tenant, is a conflict.
-        private def replay(tenantId: UUID, req: RecordUsageReq): F[Recorded] =
-          usage
-            .findByKey(tenantId, req.idempotencyKey)
-            .flatMap {
-              case Some(e) if e.metric == req.metric && e.quantity == req.quantity =>
-                Recorded(e, created = false).pure[F]
-              case _ =>
-                MonadCancelThrow[F].raiseError(DuplicateEvent(req.idempotencyKey))
             }
 
         def summary(tenantId: UUID): F[List[UsageSummary]] =
