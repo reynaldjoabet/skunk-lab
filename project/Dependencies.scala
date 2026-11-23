@@ -13,7 +13,7 @@ object Dependencies {
     val iron       = "3.4.1"
     val pureconfig = "0.17.11"
     val jsoniter   = "2.43.0"
-    val logback    = "1.6.7"
+    val logback    = "1.6.8"
     val munit      = "1.3.6"
 
   }
