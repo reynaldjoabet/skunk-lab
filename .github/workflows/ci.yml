@@ -42,7 +42,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Java
-        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
         with:
           distribution: temurin
           java-version: '21'
@@ -54,7 +54,7 @@ jobs:
             **/project/**/*.scala
 
       - name: Set up sbt
-        uses: sbt/setup-sbt@67d461eba2c4753196c230e02da850757ba4775e # v1.5.14
+        uses: sbt/setup-sbt@7e114eae4f32ec3f93c851c2793376a77f384409 # v1.5.15
 
       - name: Check formatting
         run: sbt -v "scalafmtSbtCheck; scalafmtCheckAll"
@@ -78,7 +78,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Java ${{ matrix.java }} (${{ matrix.distribution }})
-        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
         with:
           distribution: ${{ matrix.distribution }}
           java-version: ${{ matrix.java }}
@@ -90,7 +90,7 @@ jobs:
             **/project/**/*.scala
 
       - name: Set up sbt
-        uses: sbt/setup-sbt@67d461eba2c4753196c230e02da850757ba4775e # v1.5.14
+        uses: sbt/setup-sbt@7e114eae4f32ec3f93c851c2793376a77f384409 # v1.5.15
 
       - name: Compile and test
         run: sbt -v "Test/compile; test"
@@ -110,7 +110,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Java
-        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
         with:
           distribution: temurin
           java-version: '21'
@@ -122,7 +122,7 @@ jobs:
             **/project/**/*.scala
 
       - name: Set up sbt
-        uses: sbt/setup-sbt@67d461eba2c4753196c230e02da850757ba4775e # v1.5.14
+        uses: sbt/setup-sbt@7e114eae4f32ec3f93c851c2793376a77f384409 # v1.5.15
 
       - name: Assemble service jars
         run: sbt -v "ledgerpay/assembly; meterbill/assembly; kudi/assembly; identity-management/assembly"
